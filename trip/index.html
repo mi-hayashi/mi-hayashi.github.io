@@ -122,10 +122,17 @@
     <div id="tokenModal" class="token-modal">
         <div class="token-modal-content">
             <h2>🔐 GitHub トークン設定</h2>
-            <p style="color: #666; margin-bottom: 20px;">QRコードをスキャンしてトークンを入力してください</p>
+            <p style="color: #666; margin-bottom: 20px;">QRコードをスキャンまたは画像をアップロードしてください</p>
 
-            <button id="startQRScan" class="btn" style="width: 100%; margin-bottom: 15px;">
-                📷 QRコードをスキャン
+            <button id="startQRScan" class="btn" style="width: 100%; margin-bottom: 10px;">
+                📷 カメラでスキャン
+            </button>
+
+            <div style="text-align: center; margin: 10px 0; color: #999;">または</div>
+
+            <input type="file" id="qrImageInput" accept="image/*" style="display: none;">
+            <button id="uploadQRImage" class="btn" style="width: 100%; margin-bottom: 15px; background: #28a745;">
+                🖼️ QRコード画像をアップロード
             </button>
 
             <div id="qrReader" style="display: none; margin-bottom: 15px;"></div>
