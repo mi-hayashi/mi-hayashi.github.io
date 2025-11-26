@@ -49,8 +49,42 @@ function showTokenModal() {
             showTokenStatus('カメラの起動に失敗しました', 'error');
             qrReader.style.display = 'none';
             this.disabled = false;
-            this.textContent = '📷 QRコードをスキャン';
+            this.textContent = '📷 カメラでスキャン';
         }
+    };
+    
+    // QRコード画像アップロード
+    document.getElementById('uploadQRImage').onclick = function() {
+        document.getElementById('qrImageInput').click();
+    };
+    
+    document.getElementById('qrImageInput').onchange = async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        showTokenStatus('QRコードを解析中...', 'success');
+        
+        try {
+            const html5QrCodeScanner = new Html5Qrcode("qrReader");
+            const result = await html5QrCodeScanner.scanFile(file, true);
+            
+            if (result && result.startsWith('ghp_')) {
+                CONFIG.github.token = result;
+                localStorage.setItem('github_token', result);
+                showTokenStatus('✅ トークンを保存しました!', 'success');
+                setTimeout(() => {
+                    modal.classList.remove('active');
+                }, 1500);
+            } else {
+                showTokenStatus('⚠️ 無効なトークンです', 'error');
+            }
+        } catch (err) {
+            showTokenStatus('❌ QRコードの読み取りに失敗しました', 'error');
+            console.error(err);
+        }
+        
+        // ファイル入力をリセット
+        e.target.value = '';
     };
     
     // スキャン成功
