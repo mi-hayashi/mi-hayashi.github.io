@@ -154,7 +154,7 @@ const CONFIG = {
     // GitHub連携設定(オプション)
     github: {
         enabled: true,  // GitHubに保存する場合はtrueに変更
-        repo: 'miｰhayashi/mi-hayashi.github.io',  // 例: 'yourname/mission-reports'
+        repo: 'mi-hayashi/mi-hayashi.github.io',  // 例: 'yourname/mission-reports'
         token: '',  // 実行時にデコード
         _encoded: 'Z2hwX2lOdzBkdzNzUU9RRW1WaGtrMVpUWnlPUjVJbjd5ajJKVHdFbw==',  // エンコード済みトークン
     }
