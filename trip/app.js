@@ -405,20 +405,42 @@ function closeModal() {
 // GitHub Issuesに保存(オプション)
 async function saveToGitHub(report) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
+        console.log('GitHub連携が無効です');
         return;
     }
     
+    // ミッション情報を整形
+    const missionsText = report.missions 
+        ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\n')
+        : 'なし';
+    
+    // 画像を本文に埋め込む(Base64形式)
+    const imagesText = report.images.map((img, index) => {
+        if (img.isVideo) {
+            return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
+        } else {
+            return `### 画像 ${index + 1}: ${img.name}\n\n![${img.name}](${img.data})\n`;
+        }
+    }).join('\n');
+    
     const body = `
-## ${report.teamName} - ミッション報告
+## ${report.teamName} - ミッション達成報告
 
 **日時:** ${new Date(report.timestamp).toLocaleString('ja-JP')}
 
+**達成したミッション:**
+${missionsText}
+
 **コメント:** ${report.comment || 'なし'}
 
-**画像数:** ${report.images.length}枚
+---
+
+## 📸 アップロード画像・動画
+
+${imagesText}
 
 ---
-*画像データはLocalStorageに保存されています*
+*このレポートは社員旅行ミッション管理システムから自動投稿されました*
     `.trim();
     
     try {
@@ -427,11 +449,12 @@ async function saveToGitHub(report) {
             {
                 method: 'POST',
                 headers: {
+                    'Accept': 'application/vnd.github+json',
                     'Authorization': `token ${CONFIG.github.token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    title: `[${report.teamName}] ${new Date(report.timestamp).toLocaleDateString('ja-JP')}`,
+                    title: `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`,
                     body: body,
                     labels: ['mission-report', `team-${report.teamId}`]
                 })
@@ -439,10 +462,17 @@ async function saveToGitHub(report) {
         );
         
         if (!response.ok) {
-            throw new Error('GitHub API error');
+            const errorData = await response.json();
+            console.error('GitHub API エラー詳細:', errorData);
+            throw new Error(`GitHub API error: ${response.status}`);
         }
+        
+        const result = await response.json();
+        console.log('✅ GitHub Issue作成成功:', result.html_url);
+        
     } catch (error) {
-        console.error('GitHub保存エラー:', error);
+        console.error('❌ GitHub保存エラー:', error);
+        alert('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
         // エラーでも続行(LocalStorageには保存済み)
     }
 }
