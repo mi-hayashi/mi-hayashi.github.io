@@ -8,7 +8,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+// トークンをデコード
+function decodeToken() {
+    if (CONFIG.github._encoded && !CONFIG.github.token) {
+        try {
+            CONFIG.github.token = atob(CONFIG.github._encoded);
+        } catch (e) {
+            console.error('トークンのデコードに失敗しました');
+        }
+    }
+}
+
 function initializeApp() {
+    // トークンをデコード
+    decodeToken();
+    
     renderTeamGrid();
     setupFileInput();
     
@@ -104,6 +118,15 @@ function handleFileSelect(event) {
     
     files.forEach(file => {
         if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+            // 動画のサイズチェック
+            if (file.type.startsWith('video/')) {
+                const maxSize = 10 * 1024 * 1024; // 10MB
+                if (file.size > maxSize) {
+                    alert(`${file.name} は大きすぎます。\n動画は10MB以下にしてください。`);
+                    return;
+                }
+            }
+            
             selectedFiles.push(file);
             addPreview(file);
         }
@@ -231,8 +254,15 @@ function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         
-        // 動画の場合はそのまま保存
+        // 動画の場合
         if (file.type.startsWith('video/')) {
+            // 動画サイズをチェック (10MB制限)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                reject(new Error('動画ファイルが大きすぎます。10MB以下の動画を選択してください。'));
+                return;
+            }
+            
             reader.onload = () => {
                 resolve({
                     data: reader.result,
@@ -327,9 +357,9 @@ function loadTeamHistory() {
             <div class="report-images">
                 ${report.images.map(img => {
                     if (img.isVideo) {
-                        return `<video src="${img.data}" controls></video>`;
+                        return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
                     } else {
-                        return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}')">`;
+                        return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
                     }
                 }).join('')}
             </div>
@@ -338,9 +368,38 @@ function loadTeamHistory() {
     `).join('');
 }
 
-// 画像を新しいタブで開く
+// 画像を拡大表示
 function openImage(dataUrl) {
-    window.open(dataUrl, '_blank');
+    const modal = document.getElementById('mediaModal');
+    const modalImg = document.getElementById('modalImage');
+    const modalVideo = document.getElementById('modalVideo');
+    
+    modalImg.src = dataUrl;
+    modalImg.style.display = 'block';
+    modalVideo.style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+// 動画を再生
+function openVideo(dataUrl) {
+    const modal = document.getElementById('mediaModal');
+    const modalImg = document.getElementById('modalImage');
+    const modalVideo = document.getElementById('modalVideo');
+    
+    modalVideo.src = dataUrl;
+    modalVideo.style.display = 'block';
+    modalImg.style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+// モーダルを閉じる
+function closeModal() {
+    const modal = document.getElementById('mediaModal');
+    const modalVideo = document.getElementById('modalVideo');
+    
+    modal.style.display = 'none';
+    modalVideo.pause();
+    modalVideo.src = '';
 }
 
 // GitHub Issuesに保存(オプション)
@@ -469,9 +528,9 @@ function renderAdminDashboard() {
                 <div class="report-images">
                     ${report.images.map(img => {
                         if (img.isVideo) {
-                            return `<video src="${img.data}" controls></video>`;
+                            return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
                         } else {
-                            return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}')">`;
+                            return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
                         }
                     }).join('')}
                 </div>
