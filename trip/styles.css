@@ -645,6 +645,55 @@ footer {
     font-size: 0.85em;
 }
 
+/* 画像・動画拡大モーダル */
+.media-modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal-content {
+    max-width: 95%;
+    max-height: 95%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 2001;
+}
+
+.modal-close:hover {
+    color: #ccc;
+}
+
+.report-images img,
+.report-images video {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.report-images img:hover,
+.report-images video:hover {
+    transform: scale(1.05);
+}
+
 /* レスポンシブ */
 @media (max-width: 768px) {
     header h1 {
