@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社員旅行ミッション管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 社員旅行ミッション</h1>
+            <p class="subtitle">チームを選んで達成報告しよう!</p>
+        </header>
+
+        <main id="mainContent">
+            <!-- チーム選択画面 -->
+            <div id="teamSelect" class="section active">
+                <h2>チームを選択</h2>
+                <div class="team-grid" id="teamGrid">
+                    <!-- JavaScriptで動的生成 -->
+                </div>
+                <button class="btn-admin" onclick="showAdminPage()">
+                    🔑 管理者ページ
+                </button>
+            </div>
+
+            <!-- アップロード画面 -->
+            <div id="uploadPage" class="section">
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                    <button class="btn-change-team" onclick="changeTeam()">🔄 チーム変更</button>
+                </div>
+                <h2 id="currentTeamName"></h2>
+
+                <div class="upload-area">
+                    <div class="mission-info">
+                        <h3>📝 ミッション一覧</h3>
+                        <div id="missionDescription"></div>
+                        <div class="progress-info">
+                            <span id="progressCount">0</span> / <span id="progressTotal">15</span> 達成
+                        </div>
+                    </div>
+
+                    <div class="upload-form">
+                        <div class="file-input-wrapper">
+                            <input type="file" id="fileInput" accept="image/*,video/*" multiple>
+                            <label for="fileInput" class="file-label">
+                                📸 ファイルを選択(写真・動画OK)
+                            </label>
+                        </div>
+
+                        <div id="previewArea" class="preview-area"></div>
+
+                        <textarea id="commentInput" placeholder="コメントを入力(任意)" rows="3"></textarea>
+
+                        <button id="submitBtn" class="btn-submit" onclick="submitReport()">
+                            ✅ 達成報告を送信
+                        </button>
+                    </div>
+                </div>
+
+                <div class="report-history">
+                    <h3>📜 報告履歴</h3>
+                    <div id="historyList"></div>
+                </div>
+            </div>
+
+            <!-- 管理者画面 -->
+            <div id="adminPage" class="section">
+                <button class="btn-back" onclick="backToTeamSelect()">← 戻る</button>
+                <h2>🎖️ 管理者ダッシュボード</h2>
+
+                <div class="admin-controls">
+                    <input type="password" id="adminPassword" placeholder="管理者パスワード">
+                    <button onclick="loadAdminData()">ログイン</button>
+                </div>
+
+                <div id="adminContent" style="display: none;">
+                    <div class="stats-overview">
+                        <div class="stat-card">
+                            <h3>全体進捗</h3>
+                            <div class="big-number" id="totalProgress">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>完了チーム数</h3>
+                            <div class="big-number" id="completedTeams">0/6</div>
+                        </div>
+                    </div>
+
+                    <div class="team-progress-grid" id="teamProgressGrid">
+                        <!-- JavaScriptで動的生成 -->
+                    </div>
+
+                    <div class="all-reports">
+                        <h3>📊 全報告一覧</h3>
+                        <div id="allReportsList"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Made with ❤️ for 社員旅行 2025</p>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>送信中...</p>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

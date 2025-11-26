@@ -1,0 +1,665 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #4a90e2;
+    --success: #52c41a;
+    --warning: #faad14;
+    --danger: #f5222d;
+    --bg-main: #f5f7fa;
+    --bg-card: #ffffff;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --shadow: 0 2px 8px rgba(0,0,0,0.1);
+    --shadow-hover: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 5px;
+    color: var(--text-primary);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: var(--bg-main);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+
+header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 15px;
+    text-align: center;
+}
+
+header h1 {
+    font-size: 1.8em;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    font-size: 0.95em;
+    opacity: 0.9;
+}
+
+main {
+    padding: 15px;
+    min-height: 300px;
+}
+
+h2 {
+    font-size: 1.3em;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* チーム選択画面 */
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.team-card {
+    background: var(--bg-card);
+    padding: 20px 15px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.team-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--primary);
+}
+
+.team-card .team-icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+
+.team-card .team-logo {
+    margin-bottom: 10px;
+}
+
+.team-card .team-logo img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.team-card .team-name {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.team-card .team-status {
+    display: inline-block;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+
+.team-status.pending {
+    background: #fff7e6;
+    color: var(--warning);
+}
+
+.team-status.completed {
+    background: #f6ffed;
+    color: var(--success);
+}
+
+/* ボタン */
+button, .file-label {
+    font-family: inherit;
+    font-size: 14px;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-admin {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1em;
+}
+
+.btn-admin:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-back {
+    background: #f0f0f0;
+    color: var(--text-primary);
+}
+
+.btn-back:hover {
+    background: #e0e0e0;
+}
+
+.btn-change-team {
+    background: #ff9800;
+    color: white;
+    font-size: 0.85em;
+    padding: 8px 12px;
+}
+
+.btn-change-team:hover {
+    background: #f57c00;
+}
+
+.btn-submit {
+    background: var(--success);
+    color: white;
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1em;
+    margin-top: 15px;
+}
+
+.btn-submit:hover:not(:disabled) {
+    background: #389e0d;
+    transform: translateY(-2px);
+}
+
+.btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* アップロード画面 */
+.upload-area {
+    background: var(--bg-card);
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    margin-bottom: 15px;
+}
+
+.mission-info {
+    background: #e6f7ff;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 3px solid var(--primary);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.mission-info h3 {
+    margin-bottom: 10px;
+    color: var(--primary);
+    position: sticky;
+    top: 0;
+    background: #e6f7ff;
+    padding-bottom: 8px;
+    font-size: 1em;
+}
+
+.mission-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    background: white;
+    border-radius: 6px;
+    transition: all 0.2s;
+    cursor: pointer;
+    user-select: none;
+}
+
+.mission-item:hover {
+    background: #f0f9ff;
+    transform: translateX(5px);
+}
+
+.mission-item:has(.mission-checkbox:checked) {
+    background: #e6f7ff;
+    border: 2px solid var(--primary);
+}
+
+.mission-checkbox {
+    margin-right: 6px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.mission-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    font-size: 0.75em;
+    font-weight: bold;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.mission-text {
+    flex: 1;
+    line-height: 1.4;
+    font-size: 0.9em;
+    color: var(--text-primary);
+}
+
+#currentTeamName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 12px;
+}
+
+.team-logo-small {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    border-radius: 5px;
+}
+
+.progress-info {
+    margin-top: 8px;
+    font-size: 0.95em;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.file-input-wrapper {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+#fileInput {
+    display: none;
+}
+
+.file-label {
+    display: block;
+    background: var(--primary);
+    color: white;
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.file-label:hover {
+    background: #3a7bc8;
+}
+
+.preview-area {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+    min-height: 50px;
+}
+
+.preview-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.preview-item img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+
+.preview-item video {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+
+.preview-item .video-badge {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.8em;
+}
+
+.preview-item .remove-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+}
+
+textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* 報告履歴 */
+.report-history {
+    background: var(--bg-card);
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+
+.report-history h3 {
+    margin-bottom: 12px;
+    font-size: 1.1em;
+}
+
+.report-item {
+    background: #fafafa;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    border-left: 4px solid var(--primary);
+}
+
+.report-item .report-time {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.report-item .report-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.report-item .report-images img {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.report-item .report-images video {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 5px;
+}
+
+.report-item .report-comment {
+    margin-top: 10px;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.report-missions {
+    margin: 10px 0;
+    padding: 10px;
+    background: #f0f9ff;
+    border-radius: 8px;
+    border-left: 3px solid var(--primary);
+}
+
+.mission-badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.85em;
+    margin: 3px;
+    line-height: 1.6;
+}
+
+.btn-delete {
+    background: var(--danger);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-delete:hover {
+    background: #cf1322;
+    transform: translateY(-1px);
+}
+
+.btn-delete-small {
+    background: var(--danger);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-delete-small:hover {
+    background: #cf1322;
+}
+
+/* 管理者画面 */
+.admin-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+.admin-controls input {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.admin-controls button {
+    background: var(--primary);
+    color: white;
+    padding: 12px 30px;
+}
+
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.stat-card h3 {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+    font-size: 1em;
+}
+
+.big-number {
+    font-size: 3em;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.team-progress-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.team-progress-card {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+}
+
+.team-progress-card h4 {
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+.progress-bar {
+    background: #e0e0e0;
+    height: 30px;
+    border-radius: 15px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), #52c41a);
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+
+.all-reports {
+    background: var(--bg-card);
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+}
+
+/* ローディングオーバーレイ */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    flex-direction: column;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid var(--primary);
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+    color: white;
+    margin-top: 20px;
+    font-size: 1.2em;
+}
+
+footer {
+    background: #2c3e50;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    font-size: 0.85em;
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 1.8em;
+    }
+    
+    .team-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    main {
+        padding: 20px;
+    }
+    
+    .stats-overview {
+        grid-template-columns: 1fr;
+    }
+}

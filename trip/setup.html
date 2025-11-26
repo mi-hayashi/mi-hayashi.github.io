@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>セットアップガイド - 社員旅行ミッション</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #764ba2;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            color: #333;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .step {
+            background: #f5f7fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        code {
+            background: #2c3e50;
+            color: #52c41a;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .code-block {
+            background: #2c3e50;
+            color: #52c41a;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+        }
+
+        .warning {
+            background: #fff7e6;
+            border-left: 4px solid #faad14;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        .success {
+            background: #f6ffed;
+            border-left: 4px solid #52c41a;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 10px;
+            transition: transform 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 セットアップガイド</h1>
+        <p>社員旅行ミッション管理システムの導入手順を説明します。</p>
+
+        <h2>📋 必要なファイル</h2>
+        <ul>
+            <li><code>index.html</code> - メインページ</li>
+            <li><code>styles.css</code> - デザイン</li>
+            <li><code>app.js</code> - 機能実装</li>
+            <li><code>config.js</code> - 設定ファイル</li>
+            <li><code>README.md</code> - ドキュメント</li>
+        </ul>
+
+        <h2>🌐 GitHub Pagesでの公開(推奨)</h2>
+
+        <div class="step">
+            <h3><span class="step-number">1</span>GitHubアカウントを作成</h3>
+            <p>まだアカウントがない場合は <a href="https://github.com/" target="_blank">github.com</a> で作成してください。</p>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">2</span>新しいリポジトリを作成</h3>
+            <ul>
+                <li>GitHubにログイン</li>
+                <li>右上の「+」→「New repository」</li>
+                <li>Repository name: <code>mission-app</code> (任意)</li>
+                <li>Public または Private を選択</li>
+                <li>「Create repository」をクリック</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">3</span>ファイルをアップロード</h3>
+            <ul>
+                <li>「uploading an existing file」をクリック</li>
+                <li>全ファイルをドラッグ&ドロップ</li>
+                <li>「Commit changes」をクリック</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">4</span>GitHub Pagesを有効化</h3>
+            <ul>
+                <li>リポジトリの「Settings」タブ</li>
+                <li>左メニューから「Pages」</li>
+                <li>Source: 「Deploy from a branch」</li>
+                <li>Branch: 「main」/ 「root」を選択</li>
+                <li>「Save」をクリック</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            <strong>✅ 完了!</strong><br>
+            数分後に以下のURLでアクセスできます:<br>
+            <code>https://あなたのユーザー名.github.io/リポジトリ名/</code>
+        </div>
+
+        <h2>⚙️ カスタマイズ</h2>
+
+        <div class="step">
+            <h3>チーム名とミッションを変更</h3>
+            <p><code>config.js</code>を編集:</p>
+            <div class="code-block">
+                teams: [<br>
+                &nbsp;&nbsp;{<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;id: 1,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;name: 'チーム赤',<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;icon: '🔴',<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;mission: '会場の名所3箇所で記念撮影'<br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;// 追加・編集可能<br>
+                ],
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>管理者パスワードを変更</h3>
+            <p><code>config.js</code>内:</p>
+            <div class="code-block">
+                adminPassword: 'kanri2025', // 変更してください
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>達成条件を変更</h3>
+            <p><code>config.js</code>内:</p>
+            <div class="code-block">
+                requiredReports: 3, // 必要な報告回数
+            </div>
+        </div>
+
+        <h2>📱 使い方</h2>
+
+        <h3>参加者</h3>
+        <ol>
+            <li>スマホでURLにアクセス</li>
+            <li>自分のチームをタップ</li>
+            <li>「📷 写真を選択」をタップ</li>
+            <li>カメラで撮影 or ギャラリーから選択</li>
+            <li>「✅ 達成報告を送信」をタップ</li>
+        </ol>
+
+        <h3>管理者(幹事)</h3>
+        <ol>
+            <li>トップページで「🔑 管理者ページ」をタップ</li>
+            <li>パスワードを入力してログイン</li>
+            <li>全チームの進捗を確認</li>
+            <li>投稿された写真を閲覧</li>
+        </ol>
+
+        <h2>💡 Tips</h2>
+
+        <div class="warning">
+            <strong>⚠️ データ保存について</strong><br>
+            データはブラウザのLocalStorageに保存されます。<br>
+            ブラウザのキャッシュを削除するとデータも消えるので注意!<br>
+            重要なデータは管理者画面からスクリーンショットを保存することをお勧めします。
+        </div>
+
+        <div class="success">
+            <strong>💾 データのバックアップ方法</strong><br>
+            ブラウザの開発者ツール(F12)を開いて、Consoleタブで以下を実行:<br>
+            <div class="code-block">
+                // エクスポート<br>
+                console.log(localStorage.getItem('missionReports'));
+            </div>
+            コピーして保存しておけば、後で復元できます。
+        </div>
+
+        <h2>🔧 その他のホスティング方法</h2>
+
+        <h3>Netlify</h3>
+        <ol>
+            <li><a href="https://www.netlify.com/" target="_blank">netlify.com</a> にアクセス</li>
+            <li>ファイルをドラッグ&ドロップするだけ!</li>
+        </ol>
+
+        <h3>Vercel</h3>
+        <ol>
+            <li><a href="https://vercel.com/" target="_blank">vercel.com</a> にアクセス</li>
+            <li>GitHubリポジトリを連携</li>
+        </ol>
+
+        <h3>自前サーバー</h3>
+        <p>Webサーバーのルートディレクトリにファイルをアップロードするだけ!</p>
+
+        <h2>❓ トラブルシューティング</h2>
+
+        <h3>Q: 写真が送信できない</h3>
+        <p>A: ブラウザのLocalStorage容量制限の可能性があります。大きな画像は自動的に圧縮されますが、報告数が多い場合は古い報告を削除してください。</p>
+
+        <h3>Q: データが消えた</h3>
+        <p>A: ブラウザのキャッシュクリアで消える可能性があります。定期的にバックアップを取ることをお勧めします。</p>
+
+        <h3>Q: スマホでうまく表示されない</h3>
+        <p>A: レスポンシブデザインに対応していますが、古いブラウザでは正しく表示されない可能性があります。最新版のChromeやSafariをお使いください。</p>
+
+        <div class="success">
+            <h3>🎉 準備完了!</h3>
+            <p>これで社員旅行のミッション管理システムが使えます!</p>
+            <p>楽しい旅行になりますように!</p>
+            <a href="index.html" class="btn">アプリを開く</a>
+        </div>
+    </div>
+</body>
+
+</html>
