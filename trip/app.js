@@ -344,8 +344,8 @@ async function submitReport() {
         updateSubmitButton();
         
         // 履歴を再読み込み
-        loadTeamHistory();
-        renderTeamGrid();
+        await loadTeamHistory();
+        await renderTeamGrid();
         
         alert('報告を送信しました! 🎉');
         
@@ -459,6 +459,8 @@ async function getAllReports() {
 
 // GitHub Issuesから報告を取得
 async function fetchGitHubReports() {
+    console.log('📡 GitHub Issuesから報告を取得中...');
+    
     const response = await fetch(
         `https://api.github.com/repos/${CONFIG.github.repo}/issues?labels=mission-report&state=all&per_page=100`,
         {
@@ -470,32 +472,43 @@ async function fetchGitHubReports() {
     );
     
     if (!response.ok) {
+        console.error('GitHub API エラー:', response.status);
         throw new Error(`GitHub API error: ${response.status}`);
     }
     
     const issues = await response.json();
+    console.log(`✅ ${issues.length}件のIssueを取得しました`);
+    
     const reports = [];
     
     for (const issue of issues) {
         try {
             // Issueのタイトルからチーム名を抽出
             const teamMatch = issue.title.match(/【(.+?)】/);
-            if (!teamMatch) continue;
+            if (!teamMatch) {
+                console.log('スキップ(チーム名なし):', issue.title);
+                continue;
+            }
             
             const teamName = teamMatch[1];
             const team = CONFIG.teams.find(t => t.name === teamName);
-            if (!team) continue;
+            if (!team) {
+                console.log('スキップ(チーム不明):', teamName);
+                continue;
+            }
             
             // Issue本文からデータを抽出
             const report = parseIssueBody(issue, team);
             if (report) {
                 reports.push(report);
+                console.log('✅ レポート解析成功:', teamName, new Date(report.timestamp).toLocaleString('ja-JP'));
             }
         } catch (error) {
-            console.error('Issue解析エラー:', error);
+            console.error('Issue解析エラー:', error, issue.title);
         }
     }
     
+    console.log(`📊 合計 ${reports.length}件のレポートを取得しました`);
     return reports;
 }
 
@@ -818,17 +831,20 @@ async function renderAdminDashboard() {
 }
 
 // 管理者画面から報告を削除
-function deleteReportAdmin(timestamp) {
+async function deleteReportAdmin(timestamp) {
     if (!confirm('この報告を削除しますか?\n(この操作は取り消せません)')) {
         return;
     }
     
-    const reports = getAllReports();
-    const filteredReports = reports.filter(r => r.timestamp !== timestamp);
-    localStorage.setItem('missionReports', JSON.stringify(filteredReports));
+    const reports = await getAllReports();
+    const filteredReports = reports.filter(r => r.timestamp !== timestamp && !r.fromGitHub);
+    
+    // LocalStorageのみ更新(GitHub由来のデータは除外)
+    const localReports = filteredReports.filter(r => !r.fromGitHub);
+    localStorage.setItem('missionReports', JSON.stringify(localReports));
     
     // ダッシュボードを再読み込み
-    renderAdminDashboard();
+    await renderAdminDashboard();
     
     alert('報告を削除しました');
 }
@@ -858,18 +874,21 @@ function changeTeam() {
 }
 
 // 報告を削除
-function deleteReport(timestamp) {
+async function deleteReport(timestamp) {
     if (!confirm('この報告を削除しますか?\n(この操作は取り消せません)')) {
         return;
     }
     
-    const reports = getAllReports();
-    const filteredReports = reports.filter(r => r.timestamp !== timestamp);
-    localStorage.setItem('missionReports', JSON.stringify(filteredReports));
+    const reports = await getAllReports();
+    const filteredReports = reports.filter(r => r.timestamp !== timestamp && !r.fromGitHub);
+    
+    // LocalStorageのみ更新(GitHub由来のデータは除外)
+    const localReports = filteredReports.filter(r => !r.fromGitHub);
+    localStorage.setItem('missionReports', JSON.stringify(localReports));
     
     // 履歴を再読み込み
-    loadTeamHistory();
-    renderTeamGrid();
+    await loadTeamHistory();
+    await renderTeamGrid();
     
     alert('報告を削除しました');
 }
