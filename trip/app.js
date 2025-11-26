@@ -8,15 +8,85 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
-// トークンをデコード
+// トークンをLocalStorageから取得または初回入力
 function decodeToken() {
-    if (CONFIG.github._encoded && !CONFIG.github.token) {
+    // LocalStorageからトークンを取得
+    const savedToken = localStorage.getItem('github_token');
+    
+    if (savedToken) {
+        CONFIG.github.token = savedToken;
+        console.log('✅ GitHubトークン読み込み成功');
+    } else if (CONFIG.github.enabled) {
+        // トークン設定モーダルを表示
+        showTokenModal();
+    }
+}
+
+// トークン設定モーダルを表示
+function showTokenModal() {
+    const modal = document.getElementById('tokenModal');
+    modal.classList.add('active');
+    
+    let html5QrCode = null;
+    
+    // QRスキャン開始
+    document.getElementById('startQRScan').onclick = async function() {
+        const qrReader = document.getElementById('qrReader');
+        qrReader.style.display = 'block';
+        this.disabled = true;
+        this.textContent = 'スキャン中...';
+        
+        html5QrCode = new Html5Qrcode("qrReader");
+        
         try {
-            CONFIG.github.token = atob(CONFIG.github._encoded);
-        } catch (e) {
-            console.error('トークンのデコードに失敗しました');
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                () => {} // エラーは無視
+            );
+        } catch (err) {
+            showTokenStatus('カメラの起動に失敗しました', 'error');
+            qrReader.style.display = 'none';
+            this.disabled = false;
+            this.textContent = '📷 QRコードをスキャン';
+        }
+    };
+    
+    // スキャン成功
+    function onScanSuccess(decodedText) {
+        if (decodedText.startsWith('ghp_')) {
+            CONFIG.github.token = decodedText;
+            localStorage.setItem('github_token', decodedText);
+            
+            if (html5QrCode) {
+                html5QrCode.stop();
+            }
+            
+            showTokenStatus('✅ トークンを保存しました!', 'success');
+            setTimeout(() => {
+                modal.classList.remove('active');
+            }, 1500);
+        } else {
+            showTokenStatus('⚠️ 無効なトークンです', 'error');
         }
     }
+    
+    // スキップボタン
+    document.getElementById('skipToken').onclick = function() {
+        CONFIG.github.enabled = false;
+        modal.classList.remove('active');
+        if (html5QrCode) {
+            html5QrCode.stop();
+        }
+    };
+}
+
+// トークンステータス表示
+function showTokenStatus(message, type) {
+    const status = document.getElementById('tokenStatus');
+    status.textContent = message;
+    status.className = type;
 }
 
 function initializeApp() {
@@ -402,7 +472,7 @@ function closeModal() {
     modalVideo.src = '';
 }
 
-// GitHub Issuesに保存(オプション)
+// GitHub Actionsを使ってIssueを作成
 async function saveToGitHub(report) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
         console.log('GitHub連携が無効です');
@@ -411,20 +481,20 @@ async function saveToGitHub(report) {
     
     // ミッション情報を整形
     const missionsText = report.missions 
-        ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\n')
+        ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\\n')
         : 'なし';
     
     // 画像を本文に埋め込む(Base64形式)
     const imagesText = report.images.map((img, index) => {
         if (img.isVideo) {
-            return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
+            return `### 動画 ${index + 1}: ${img.name}\\n\\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\\n`;
         } else {
-            return `### 画像 ${index + 1}: ${img.name}\n\n![${img.name}](${img.data})\n`;
+            return `### 画像 ${index + 1}: ${img.name}\\n\\n![${img.name}](${img.data})\\n`;
         }
-    }).join('\n');
+    }).join('\\n');
     
-    const body = `
-## ${report.teamName} - ミッション達成報告
+    const title = `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`;
+    const body = `## ${report.teamName} - ミッション達成報告
 
 **日時:** ${new Date(report.timestamp).toLocaleString('ja-JP')}
 
@@ -440,12 +510,14 @@ ${missionsText}
 ${imagesText}
 
 ---
-*このレポートは社員旅行ミッション管理システムから自動投稿されました*
-    `.trim();
+*このレポートは社員旅行ミッション管理システムから自動投稿されました*`;
+
+    const labels = `mission-report,team-${report.teamId}`;
     
     try {
+        // GitHub Actions workflow_dispatch を呼び出す
         const response = await fetch(
-            `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
+            `https://api.github.com/repos/${CONFIG.github.repo}/actions/workflows/create_issue.yml/dispatches`,
             {
                 method: 'POST',
                 headers: {
@@ -454,26 +526,27 @@ ${imagesText}
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    title: `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`,
-                    body: body,
-                    labels: ['mission-report', `team-${report.teamId}`]
+                    ref: 'main',
+                    inputs: {
+                        title: title,
+                        body: body,
+                        labels: labels
+                    }
                 })
             }
         );
         
         if (!response.ok) {
             const errorData = await response.json();
-            console.error('GitHub API エラー詳細:', errorData);
-            throw new Error(`GitHub API error: ${response.status}`);
+            console.error('GitHub Actions エラー詳細:', errorData);
+            throw new Error(`GitHub Actions error: ${response.status}`);
         }
         
-        const result = await response.json();
-        console.log('✅ GitHub Issue作成成功:', result.html_url);
+        console.log('✅ GitHub Actionsトリガー成功 - 数秒後にIssueが作成されます');
         
     } catch (error) {
         console.error('❌ GitHub保存エラー:', error);
         alert('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
-        // エラーでも続行(LocalStorageには保存済み)
     }
 }
 
