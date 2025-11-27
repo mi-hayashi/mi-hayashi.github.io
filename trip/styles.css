@@ -498,6 +498,27 @@ textarea:focus {
     line-height: 1.6;
 }
 
+/* ミッション詳細表示のスタイル */
+details summary {
+    padding: 8px 12px;
+    background: #f0f7ff;
+    border-radius: 5px;
+    transition: background 0.2s;
+}
+
+details summary:hover {
+    background: #e1f0ff;
+}
+
+details[open] summary {
+    margin-bottom: 10px;
+    background: #d6ebff;
+}
+
+details summary::marker {
+    color: var(--primary);
+}
+
 .btn-delete {
     background: var(--danger);
     color: white;
