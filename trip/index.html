@@ -22,14 +22,21 @@
                 <div class="team-grid" id="teamGrid">
                     <!-- JavaScriptで動的生成 -->
                 </div>
-                <button class="btn-admin" onclick="showAdminPage()">
+                <a href="admin.html" class="btn-admin"
+                    style="display: block; text-align: center; text-decoration: none;">
                     🔑 管理者ページ
-                </button>
+                </a>
             </div>
 
             <!-- アップロード画面 -->
             <div id="uploadPage" class="section">
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button class="btn-refresh" onclick="manualRefresh()" title="最新データを取得">
+                            🔄 更新
+                        </button>
+                        <span id="lastUpdateTime" style="font-size: 0.85em; color: #999;"></span>
+                    </div>
                     <button class="btn-change-team" onclick="changeTeam()">🔄 チーム変更</button>
                 </div>
                 <h2 id="currentTeamName"></h2>
@@ -64,39 +71,6 @@
                 <div class="report-history">
                     <h3>📜 報告履歴</h3>
                     <div id="historyList"></div>
-                </div>
-            </div>
-
-            <!-- 管理者画面 -->
-            <div id="adminPage" class="section">
-                <button class="btn-back" onclick="backToTeamSelect()">← 戻る</button>
-                <h2>🎖️ 管理者ダッシュボード</h2>
-
-                <div class="admin-controls">
-                    <input type="password" id="adminPassword" placeholder="管理者パスワード">
-                    <button onclick="loadAdminData()">ログイン</button>
-                </div>
-
-                <div id="adminContent" style="display: none;">
-                    <div class="stats-overview">
-                        <div class="stat-card">
-                            <h3>全体進捗</h3>
-                            <div class="big-number" id="totalProgress">0%</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>完了チーム数</h3>
-                            <div class="big-number" id="completedTeams">0/6</div>
-                        </div>
-                    </div>
-
-                    <div class="team-progress-grid" id="teamProgressGrid">
-                        <!-- JavaScriptで動的生成 -->
-                    </div>
-
-                    <div class="all-reports">
-                        <h3>📊 全報告一覧</h3>
-                        <div id="allReportsList"></div>
-                    </div>
                 </div>
             </div>
         </main>
@@ -142,6 +116,62 @@
             </button>
 
             <div id="tokenStatus" style="margin-top: 15px; padding: 10px; border-radius: 5px; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- チームパスワード入力モーダル -->
+    <div id="teamPasswordModal" class="token-modal">
+        <div class="token-modal-content">
+            <h2>🔒 チーム認証</h2>
+            <div id="teamPasswordInfo" style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <img id="teamPasswordLogo" src="" alt=""
+                        style="width: 50px; height: 50px; object-fit: contain; border-radius: 5px;">
+                    <h3 id="teamPasswordName" style="margin: 0;"></h3>
+                </div>
+                <p style="color: #666;">このチームのパスワードを入力してください</p>
+            </div>
+
+            <input type="password" id="teamPasswordInput" placeholder="パスワードを入力"
+                style="width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+
+            <button id="submitTeamPassword" class="btn" style="width: 100%; margin-bottom: 10px;">
+                ✅ 認証
+            </button>
+
+            <button id="cancelTeamPassword" class="btn" style="width: 100%; background: #6c757d;">
+                キャンセル
+            </button>
+
+            <div id="passwordError"
+                style="margin-top: 15px; padding: 10px; border-radius: 5px; background: #f8d7da; color: #721c24; display: none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- チーム変更用管理者パスワードモーダル -->
+    <div id="adminPasswordModal" class="token-modal">
+        <div class="token-modal-content">
+            <h2>🔑 管理者認証</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                チーム変更には管理者の確認が必要です。<br>
+                管理者パスワードを入力してください。
+            </p>
+
+            <input type="password" id="adminPasswordInput" placeholder="管理者パスワード"
+                style="width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+
+            <button id="submitAdminPassword" class="btn" style="width: 100%; margin-bottom: 10px;">
+                ✅ チーム変更を許可
+            </button>
+
+            <button id="cancelAdminPassword" class="btn" style="width: 100%; background: #6c757d;">
+                キャンセル
+            </button>
+
+            <div id="adminPasswordError"
+                style="margin-top: 15px; padding: 10px; border-radius: 5px; background: #f8d7da; color: #721c24; display: none;">
+            </div>
         </div>
     </div>
 
