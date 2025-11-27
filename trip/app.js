@@ -2,6 +2,9 @@
 let currentTeam = null;
 let selectedFiles = [];
 let allReports = [];
+let autoRefreshTimer = null;
+let lastReportCount = 0;
+let lastUpdateTime = null;
 
 // 初期化
 document.addEventListener('DOMContentLoaded', () => {
@@ -138,10 +141,125 @@ function initializeApp() {
             selectTeam(team);
         }
     }
+    
+    // 自動リフレッシュ開始(30秒ごと)
+    startAutoRefresh();
+}
+
+// 自動リフレッシュを開始
+function startAutoRefresh() {
+    // 既存のタイマーをクリア
+    if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+    }
+    
+    // 30秒ごとに自動更新
+    autoRefreshTimer = setInterval(async () => {
+        console.log('🔄 自動リフレッシュ実行中...');
+        await refreshData(false); // 通知なしで更新
+    }, 30000); // 30秒
+    
+    console.log('✅ 自動リフレッシュ開始 (30秒ごと)');
+}
+
+// データを手動でリフレッシュ
+async function manualRefresh() {
+    console.log('🔄 手動リフレッシュ実行中...');
+    showRefreshStatus('更新中...', 'loading');
+    await refreshData(true); // 通知ありで更新
+}
+
+// データをリフレッシュ(共通処理)
+async function refreshData(showNotification = false) {
+    try {
+        const beforeCount = lastReportCount;
+        
+        // 現在のページに応じて更新
+        const currentPage = document.querySelector('.section.active');
+        if (currentPage && currentPage.id === 'uploadPage' && currentTeam) {
+            // チーム履歴を再読み込み
+            await loadTeamHistory();
+            
+            // 進捗を更新
+            const reports = await getTeamReports(currentTeam.id);
+            document.getElementById('progressCount').textContent = reports.length;
+            
+            lastReportCount = reports.length;
+        } else if (currentPage && currentPage.id === 'teamSelect') {
+            // チーム選択画面を再読み込み
+            await renderTeamGrid();
+        }
+        
+        lastUpdateTime = new Date();
+        
+        // 新しい報告があれば通知
+        if (showNotification && lastReportCount > beforeCount) {
+            const newCount = lastReportCount - beforeCount;
+            showRefreshStatus(`✨ 新しい報告が${newCount}件あります!`, 'success');
+        } else if (showNotification) {
+            showRefreshStatus('✅ 最新データを取得しました', 'success');
+        }
+        
+        updateLastUpdateTime();
+        
+    } catch (error) {
+        console.error('❌ リフレッシュエラー:', error);
+        if (showNotification) {
+            showRefreshStatus('⚠️ 更新に失敗しました', 'error');
+        }
+    }
+}
+
+// リフレッシュステータス表示
+function showRefreshStatus(message, type) {
+    // トースト通知を表示
+    const toast = document.createElement('div');
+    toast.className = `refresh-toast ${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#52c41a' : type === 'error' ? '#f5222d' : '#1890ff'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 500;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 3秒後に削除
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// 最終更新時刻を表示
+function updateLastUpdateTime() {
+    const timeElement = document.getElementById('lastUpdateTime');
+    if (timeElement && lastUpdateTime) {
+        const timeStr = lastUpdateTime.toLocaleTimeString('ja-JP');
+        timeElement.textContent = `最終更新: ${timeStr}`;
+    }
 }
 
 // チーム選択画面のレンダリング
 async function renderTeamGrid() {
+    // ロックイン済みの場合はチーム選択をスキップ
+    const lockedTeamId = localStorage.getItem('lockedTeamId');
+    if (lockedTeamId) {
+        const team = CONFIG.teams.find(t => t.id === parseInt(lockedTeamId));
+        if (team) {
+            await selectTeam(team);
+            return;
+        }
+    }
+    
     const teamGrid = document.getElementById('teamGrid');
     teamGrid.innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
     
@@ -152,7 +270,7 @@ async function renderTeamGrid() {
     CONFIG.teams.forEach(team => {
         const teamCard = document.createElement('div');
         teamCard.className = 'team-card';
-        teamCard.onclick = () => selectTeam(team);
+        teamCard.onclick = () => showTeamPasswordModal(team);
         
         const reports = allReports.filter(r => r.teamId === team.id);
         const isCompleted = reports.length >= CONFIG.requiredReports;
@@ -169,6 +287,55 @@ async function renderTeamGrid() {
         
         teamGrid.appendChild(teamCard);
     });
+}
+
+// チームパスワードモーダルを表示
+function showTeamPasswordModal(team) {
+    const modal = document.getElementById('teamPasswordModal');
+    document.getElementById('teamPasswordLogo').src = team.logo;
+    document.getElementById('teamPasswordName').textContent = team.name;
+    document.getElementById('teamPasswordInput').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+    
+    modal.classList.add('active');
+    
+    // Enterキーで送信
+    const passwordInput = document.getElementById('teamPasswordInput');
+    passwordInput.onkeypress = function(e) {
+        if (e.key === 'Enter') {
+            verifyTeamPassword(team);
+        }
+    };
+    
+    // 認証ボタン
+    document.getElementById('submitTeamPassword').onclick = () => verifyTeamPassword(team);
+    
+    // キャンセルボタン
+    document.getElementById('cancelTeamPassword').onclick = () => {
+        modal.classList.remove('active');
+    };
+    
+    // フォーカス
+    setTimeout(() => passwordInput.focus(), 100);
+}
+
+// チームパスワードを検証
+function verifyTeamPassword(team) {
+    const input = document.getElementById('teamPasswordInput').value;
+    const errorDiv = document.getElementById('passwordError');
+    
+    if (input === team.password) {
+        // 認証成功
+        localStorage.setItem('lockedTeamId', team.id);
+        document.getElementById('teamPasswordModal').classList.remove('active');
+        selectTeam(team);
+    } else {
+        // 認証失敗
+        errorDiv.textContent = '⚠️ パスワードが違います';
+        errorDiv.style.display = 'block';
+        document.getElementById('teamPasswordInput').value = '';
+        document.getElementById('teamPasswordInput').focus();
+    }
 }
 
 // チーム選択
@@ -344,8 +511,8 @@ async function submitReport() {
         updateSubmitButton();
         
         // 履歴を再読み込み
-        await loadTeamHistory();
-        await renderTeamGrid();
+        loadTeamHistory();
+        renderTeamGrid();
         
         alert('報告を送信しました! 🎉');
         
@@ -421,94 +588,123 @@ function fileToBase64(file) {
 }
 
 // レポート保存(LocalStorage)
-function saveReport(report) {
-    const reports = getAllReports();
+async function saveReport(report) {
+    const localData = localStorage.getItem('missionReports');
+    const reports = localData ? JSON.parse(localData) : [];
     reports.push(report);
     localStorage.setItem('missionReports', JSON.stringify(reports));
 }
 
 // 全レポート取得(LocalStorage + GitHub Issues)
 async function getAllReports() {
+    // ロックイン済みチームを取得
+    const lockedTeamId = localStorage.getItem('lockedTeamId');
+    
     // LocalStorageのデータ
     const localData = localStorage.getItem('missionReports');
-    const localReports = localData ? JSON.parse(localData) : [];
+    let localReports = localData ? JSON.parse(localData) : [];
+    
+    // ロックイン済みの場合は自チームのみ
+    if (lockedTeamId) {
+        localReports = localReports.filter(r => r.teamId === parseInt(lockedTeamId));
+    }
+    
+    console.log('📦 LocalStorageレポート数:', localReports.length, lockedTeamId ? `(チーム${lockedTeamId}のみ)` : '');
     
     // GitHub Issuesからも取得
     if (CONFIG.github.enabled && CONFIG.github.token) {
+        console.log('🔄 GitHub Issuesから取得開始...');
         try {
-            const githubReports = await fetchGitHubReports();
+            const githubReports = await fetchGitHubReports(lockedTeamId);
+            console.log('📡 GitHub Issuesレポート数:', githubReports.length);
             
             // 重複を除去してマージ
             const allReports = [...localReports];
+            let addedCount = 0;
             githubReports.forEach(ghReport => {
                 // timestampで重複チェック
                 if (!allReports.find(r => r.timestamp === ghReport.timestamp)) {
                     allReports.push(ghReport);
+                    addedCount++;
                 }
             });
             
+            console.log('✅ 統合完了 - ローカル:', localReports.length, ', GitHub:', githubReports.length, ', 追加:', addedCount, ', 合計:', allReports.length);
+            
             return allReports.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         } catch (error) {
-            console.error('GitHub Issuesの取得エラー:', error);
+            console.error('❌ GitHub Issuesの取得エラー:', error);
             return localReports;
         }
+    } else {
+        console.log('⚠️ GitHub連携が無効です');
     }
     
     return localReports;
 }
 
 // GitHub Issuesから報告を取得
-async function fetchGitHubReports() {
-    console.log('📡 GitHub Issuesから報告を取得中...');
+async function fetchGitHubReports(filterTeamId = null) {
+    // チームフィルタ用のラベル
+    let labelsParam = 'mission-report';
+    if (filterTeamId) {
+        labelsParam += `,team-${filterTeamId}`;
+    }
     
-    const response = await fetch(
-        `https://api.github.com/repos/${CONFIG.github.repo}/issues?labels=mission-report&state=all&per_page=100`,
-        {
-            headers: {
-                'Accept': 'application/vnd.github+json',
-                'Authorization': `token ${CONFIG.github.token}`
-            }
+    const url = `https://api.github.com/repos/${CONFIG.github.repo}/issues?labels=${labelsParam}&state=all&per_page=100`;
+    console.log('🌐 GitHub API呼び出し:', url);
+    
+    const response = await fetch(url, {
+        headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': `token ${CONFIG.github.token}`
         }
-    );
+    });
     
     if (!response.ok) {
-        console.error('GitHub API エラー:', response.status);
+        console.error('❌ GitHub APIエラー - ステータス:', response.status);
+        const errorText = await response.text();
+        console.error('エラー詳細:', errorText);
         throw new Error(`GitHub API error: ${response.status}`);
     }
     
     const issues = await response.json();
-    console.log(`✅ ${issues.length}件のIssueを取得しました`);
+    console.log('📝 取得したIssue数:', issues.length);
     
     const reports = [];
     
     for (const issue of issues) {
         try {
+            console.log('🔍 Issue解析中:', issue.title);
+            
             // Issueのタイトルからチーム名を抽出
             const teamMatch = issue.title.match(/【(.+?)】/);
             if (!teamMatch) {
-                console.log('スキップ(チーム名なし):', issue.title);
+                console.warn('⚠️ チーム名が見つかりません:', issue.title);
                 continue;
             }
             
             const teamName = teamMatch[1];
             const team = CONFIG.teams.find(t => t.name === teamName);
             if (!team) {
-                console.log('スキップ(チーム不明):', teamName);
+                console.warn('⚠️ 該当チームが存在しません:', teamName);
                 continue;
             }
             
             // Issue本文からデータを抽出
             const report = parseIssueBody(issue, team);
             if (report) {
+                console.log('✅ レポート解析成功:', teamName, new Date(report.timestamp).toLocaleString());
                 reports.push(report);
-                console.log('✅ レポート解析成功:', teamName, new Date(report.timestamp).toLocaleString('ja-JP'));
+            } else {
+                console.warn('⚠️ レポート解析失敗:', issue.title);
             }
         } catch (error) {
-            console.error('Issue解析エラー:', error, issue.title);
+            console.error('❌ Issue解析エラー:', issue.title, error);
         }
     }
     
-    console.log(`📊 合計 ${reports.length}件のレポートを取得しました`);
+    console.log('📊 解析完了 - 有効なレポート数:', reports.length);
     return reports;
 }
 
@@ -578,7 +774,9 @@ async function loadTeamHistory() {
     const historyList = document.getElementById('historyList');
     historyList.innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
     
+    console.log('📂 チーム履歴読み込み開始:', currentTeam.name);
     const reports = await getTeamReports(currentTeam.id);
+    console.log('📊 このチームのレポート数:', reports.length);
     
     if (reports.length === 0) {
         historyList.innerHTML = '<p style="text-align: center; color: #999;">まだ報告がありません</p>';
@@ -726,129 +924,6 @@ ${imagesText}
     }
 }
 
-// 管理者ページ表示
-function showAdminPage() {
-    showPage('adminPage');
-}
-
-// 管理者データ読み込み
-function loadAdminData() {
-    const password = document.getElementById('adminPassword').value;
-    
-    if (password !== CONFIG.adminPassword) {
-        alert('パスワードが違います');
-        return;
-    }
-    
-    document.getElementById('adminContent').style.display = 'block';
-    renderAdminDashboard();
-}
-
-// 管理者ダッシュボードレンダリング
-async function renderAdminDashboard() {
-    // ローディング表示
-    document.getElementById('teamProgressGrid').innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
-    document.getElementById('allReportsList').innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
-    
-    const allReports = await getAllReports();
-    
-    // 統計情報
-    const totalReports = allReports.length;
-    
-    // チーム別に集計
-    const teamReportCounts = {};
-    CONFIG.teams.forEach(team => {
-        teamReportCounts[team.id] = allReports.filter(r => r.teamId === team.id).length;
-    });
-    
-    const completedTeams = CONFIG.teams.filter(team => 
-        teamReportCounts[team.id] >= CONFIG.requiredReports
-    ).length;
-    const totalProgress = Math.round((completedTeams / CONFIG.teams.length) * 100);
-    
-    document.getElementById('totalProgress').textContent = `${totalProgress}%`;
-    document.getElementById('completedTeams').textContent = 
-        `${completedTeams}/${CONFIG.teams.length}`;
-    
-    // チーム別進捗
-    const teamProgressGrid = document.getElementById('teamProgressGrid');
-    teamProgressGrid.innerHTML = CONFIG.teams.map(team => {
-        const reports = teamReportCounts[team.id];
-        const progress = Math.min((reports / CONFIG.requiredReports) * 100, 100);
-        const isCompleted = reports >= CONFIG.requiredReports;
-        
-        return `
-            <div class="team-progress-card">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <img src="${team.logo}" alt="${team.name}" style="width: 40px; height: 40px; object-fit: contain; border-radius: 5px;">
-                    <h4 style="margin: 0;">${team.name}</h4>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${progress}%">
-                        ${reports}/${CONFIG.requiredReports}
-                    </div>
-                </div>
-                <p style="margin-top: 10px; color: ${isCompleted ? 'var(--success)' : 'var(--text-secondary)'}">
-                    ${isCompleted ? '✓ 達成済み' : '進行中'}
-                </p>
-            </div>
-        `;
-    }).join('');
-    
-    // 全報告一覧
-    const allReportsList = document.getElementById('allReportsList');
-    if (allReports.length === 0) {
-        allReportsList.innerHTML = '<p style="text-align: center; color: #999;">まだ報告がありません</p>';
-    } else {
-        allReportsList.innerHTML = allReports.reverse().map(report => `
-            <div class="report-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <strong>${report.teamName} ${report.fromGitHub ? '<span style="color: #28a745; font-size: 0.8em;">📡 GitHub</span>' : ''}</strong>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="report-time">${new Date(report.timestamp).toLocaleString('ja-JP')}</span>
-                        ${!report.fromGitHub ? `<button class="btn-delete-small" onclick="deleteReportAdmin('${report.timestamp}')">🗑️</button>` : ''}
-                    </div>
-                </div>
-                ${report.missions ? `
-                    <div class="report-missions">
-                        <strong>達成ミッション:</strong>
-                        ${report.missions.map(m => `<span class="mission-badge">${m.index + 1}. ${m.text}</span>`).join('')}
-                    </div>
-                ` : ''}
-                <div class="report-images">
-                    ${report.images.filter(img => img.data).map(img => {
-                        if (img.isVideo) {
-                            return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
-                        } else {
-                            return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
-                        }
-                    }).join('')}
-                </div>
-                ${report.comment && report.comment !== 'なし' ? `<div class="report-comment">"${report.comment}"</div>` : ''}
-            </div>
-        `).join('');
-    }
-}
-
-// 管理者画面から報告を削除
-async function deleteReportAdmin(timestamp) {
-    if (!confirm('この報告を削除しますか?\n(この操作は取り消せません)')) {
-        return;
-    }
-    
-    const reports = await getAllReports();
-    const filteredReports = reports.filter(r => r.timestamp !== timestamp && !r.fromGitHub);
-    
-    // LocalStorageのみ更新(GitHub由来のデータは除外)
-    const localReports = filteredReports.filter(r => !r.fromGitHub);
-    localStorage.setItem('missionReports', JSON.stringify(localReports));
-    
-    // ダッシュボードを再読み込み
-    await renderAdminDashboard();
-    
-    alert('報告を削除しました');
-}
-
 // ページ切り替え
 function showPage(pageId) {
     document.querySelectorAll('.section').forEach(section => {
@@ -857,19 +932,66 @@ function showPage(pageId) {
     document.getElementById(pageId).classList.add('active');
 }
 
-// チーム選択画面に戻る
-function backToTeamSelect() {
-    showPage('teamSelect');
-    currentTeam = null;
-    renderTeamGrid();
-}
-
 // チーム設定を変更
 function changeTeam() {
-    if (confirm('チームを変更しますか?')) {
+    // 管理者パスワードモーダルを表示
+    showAdminPasswordModal();
+}
+
+// 管理者パスワードモーダルを表示
+function showAdminPasswordModal() {
+    const modal = document.getElementById('adminPasswordModal');
+    document.getElementById('adminPasswordInput').value = '';
+    document.getElementById('adminPasswordError').style.display = 'none';
+    
+    modal.classList.add('active');
+    
+    // Enterキーで送信
+    const passwordInput = document.getElementById('adminPasswordInput');
+    passwordInput.onkeypress = function(e) {
+        if (e.key === 'Enter') {
+            verifyAdminPassword();
+        }
+    };
+    
+    // 認証ボタン
+    document.getElementById('submitAdminPassword').onclick = verifyAdminPassword;
+    
+    // キャンセルボタン
+    document.getElementById('cancelAdminPassword').onclick = () => {
+        modal.classList.remove('active');
+    };
+    
+    // フォーカス
+    setTimeout(() => passwordInput.focus(), 100);
+}
+
+// 管理者パスワードを検証してチーム変更を許可
+function verifyAdminPassword() {
+    const input = document.getElementById('adminPasswordInput').value;
+    const errorDiv = document.getElementById('adminPasswordError');
+    const modal = document.getElementById('adminPasswordModal');
+    
+    if (input === CONFIG.adminPassword) {
+        // 認証成功
+        modal.classList.remove('active');
+        
+        // ロックイン解除
+        localStorage.removeItem('lockedTeamId');
         localStorage.removeItem('selectedTeamId');
+        
+        // チーム選択画面に戻る
         currentTeam = null;
         showPage('teamSelect');
+        renderTeamGrid();
+        
+        alert('✅ チーム変更が許可されました。\n新しいチームを選択してください。');
+    } else {
+        // 認証失敗
+        errorDiv.textContent = '⚠️ 管理者パスワードが違います';
+        errorDiv.style.display = 'block';
+        document.getElementById('adminPasswordInput').value = '';
+        document.getElementById('adminPasswordInput').focus();
     }
 }
 
@@ -879,16 +1001,14 @@ async function deleteReport(timestamp) {
         return;
     }
     
-    const reports = await getAllReports();
-    const filteredReports = reports.filter(r => r.timestamp !== timestamp && !r.fromGitHub);
-    
-    // LocalStorageのみ更新(GitHub由来のデータは除外)
-    const localReports = filteredReports.filter(r => !r.fromGitHub);
-    localStorage.setItem('missionReports', JSON.stringify(localReports));
+    const localData = localStorage.getItem('missionReports');
+    const reports = localData ? JSON.parse(localData) : [];
+    const filteredReports = reports.filter(r => r.timestamp !== timestamp);
+    localStorage.setItem('missionReports', JSON.stringify(filteredReports));
     
     // 履歴を再読み込み
-    await loadTeamHistory();
-    await renderTeamGrid();
+    loadTeamHistory();
+    renderTeamGrid();
     
     alert('報告を削除しました');
 }
