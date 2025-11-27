@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者ダッシュボード - 社員旅行ミッション管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🎖️ 管理者ダッシュボード</h1>
+            <p class="subtitle">全チームの進捗を確認</p>
+        </header>
+
+        <main id="mainContent">
+            <!-- ログイン画面 -->
+            <div id="loginSection" class="section active">
+                <div class="admin-controls">
+                    <h2>管理者認証</h2>
+                    <input type="password" id="adminPassword" placeholder="管理者パスワード">
+                    <button onclick="adminLogin()" class="btn">ログイン</button>
+                    <div id="loginError"
+                        style="margin-top: 15px; padding: 10px; border-radius: 5px; background: #f8d7da; color: #721c24; display: none;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ダッシュボード -->
+            <div id="dashboardSection" class="section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <button class="btn-back" onclick="location.href='index.html'">← チーム画面に戻る</button>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button class="btn-refresh" onclick="manualRefresh()" title="最新データを取得">
+                            🔄 更新
+                        </button>
+                        <span id="lastUpdateTime" style="font-size: 0.85em; color: #999;"></span>
+                    </div>
+                </div>
+
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <h3>全体進捗</h3>
+                        <div class="big-number" id="totalProgress">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>完了チーム数</h3>
+                        <div class="big-number" id="completedTeams">0/6</div>
+                    </div>
+                </div>
+
+                <div class="team-progress-grid" id="teamProgressGrid">
+                    <!-- JavaScriptで動的生成 -->
+                </div>
+
+                <div class="all-reports">
+                    <h3>📊 全報告一覧</h3>
+                    <div id="allReportsList"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Made with ❤️ for 社員旅行 2025</p>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>読み込み中...</p>
+    </div>
+
+    <!-- 画像・動画拡大モーダル -->
+    <div id="mediaModal" class="media-modal" onclick="closeModal()">
+        <span class="modal-close">&times;</span>
+        <img id="modalImage" class="modal-content">
+        <video id="modalVideo" class="modal-content" controls></video>
+    </div>
+
+    <!-- トークン設定モーダル -->
+    <div id="tokenModal" class="token-modal">
+        <div class="token-modal-content">
+            <h2>🔐 GitHub トークン設定</h2>
+            <p style="color: #666; margin-bottom: 20px;">QRコードをスキャンまたは画像をアップロードしてください</p>
+
+            <button id="startQRScan" class="btn" style="width: 100%; margin-bottom: 10px;">
+                📷 カメラでスキャン
+            </button>
+
+            <div style="text-align: center; margin: 10px 0; color: #999;">または</div>
+
+            <input type="file" id="qrImageInput" accept="image/*" style="display: none;">
+            <button id="uploadQRImage" class="btn" style="width: 100%; margin-bottom: 15px; background: #28a745;">
+                🖼️ QRコード画像をアップロード
+            </button>
+
+            <div id="qrReader" style="display: none; margin-bottom: 15px;"></div>
+
+            <button id="skipToken" class="btn" style="width: 100%; background: #6c757d;">
+                スキップ (LocalStorageのみ)
+            </button>
+
+            <div id="tokenStatus" style="margin-top: 15px; padding: 10px; border-radius: 5px; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- QRコードスキャンライブラリ -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+</body>
+
+</html>
