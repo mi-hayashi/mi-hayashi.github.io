@@ -391,9 +391,33 @@ async function renderAdminDashboard() {
     
     const teamProgressGrid = document.getElementById('teamProgressGrid');
     teamProgressGrid.innerHTML = CONFIG.teams.map(team => {
-        const reports = teamReportCounts[team.id];
-        const progress = Math.min((reports / CONFIG.requiredReports) * 100, 100);
-        const isCompleted = reports >= CONFIG.requiredReports;
+        const teamReports = allReports.filter(r => r.teamId === team.id);
+        const reportCount = teamReports.length;
+        const progress = Math.min((reportCount / CONFIG.requiredReports) * 100, 100);
+        const isCompleted = reportCount >= CONFIG.requiredReports;
+        
+        // 達成済みミッションを集計
+        const completedMissions = new Set();
+        teamReports.forEach(report => {
+            if (report.missions && Array.isArray(report.missions)) {
+                report.missions.forEach(m => {
+                    completedMissions.add(m.index);
+                });
+            }
+        });
+        
+        // ミッション一覧を生成
+        const missionList = team.missions.map((mission, index) => {
+            const isCompleted = completedMissions.has(index);
+            return `
+                <div style="display: flex; align-items: center; gap: 5px; padding: 3px 0;">
+                    <span style="font-size: 0.9em;">${isCompleted ? '✅' : '⬜'}</span>
+                    <span style="font-size: 0.85em; color: ${isCompleted ? '#52c41a' : '#999'};">
+                        ${index + 1}. ${mission}
+                    </span>
+                </div>
+            `;
+        }).join('');
         
         return `
             <div class="team-progress-card">
@@ -403,12 +427,20 @@ async function renderAdminDashboard() {
                 </div>
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: ${progress}%">
-                        ${reports}/${CONFIG.requiredReports}
+                        ${reportCount}/${CONFIG.requiredReports}
                     </div>
                 </div>
                 <p style="margin-top: 10px; color: ${isCompleted ? 'var(--success)' : 'var(--text-secondary)'}">
-                    ${isCompleted ? '✓ 達成済み' : '進行中'}
+                    ${isCompleted ? '✓ 達成済み' : '進行中'} (ミッション ${completedMissions.size}/${team.missions.length} 達成)
                 </p>
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; font-weight: 500; color: #4a90e2; user-select: none;">
+                        📋 ミッション詳細を表示
+                    </summary>
+                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+                        ${missionList}
+                    </div>
+                </details>
             </div>
         `;
     }).join('');
