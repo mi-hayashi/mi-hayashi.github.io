@@ -350,17 +350,31 @@ async function selectTeam(team) {
         ${team.name}
     `;
     
-    // ミッションリストを表示
-    const missionList = document.getElementById('missionDescription');
-    missionList.innerHTML = team.missions.map((mission, index) => `
-        <div class="mission-item" onclick="toggleMission(event, ${index})">
-            <input type="checkbox" id="mission-${index}" class="mission-checkbox" onclick="event.stopPropagation()">
-            <span class="mission-number">${index + 1}</span>
-            <span class="mission-text">${mission}</span>
-        </div>
-    `).join('');
-    
     const reports = await getTeamReports(team.id);
+    
+    // 達成済みミッションを取得
+    const completedMissions = new Set();
+    reports.forEach(report => {
+        if (report.missions && Array.isArray(report.missions)) {
+            report.missions.forEach(m => {
+                completedMissions.add(m.index);
+            });
+        }
+    });
+    
+    // ミッションリストを表示（達成済みは緑色表示）
+    const missionList = document.getElementById('missionDescription');
+    missionList.innerHTML = team.missions.map((mission, index) => {
+        const isCompleted = completedMissions.has(index);
+        return `
+            <div class="mission-item ${isCompleted ? 'completed' : ''}" onclick="toggleMission(event, ${index})">
+                <input type="checkbox" id="mission-${index}" class="mission-checkbox" onclick="event.stopPropagation()">
+                <span class="mission-number ${isCompleted ? 'completed' : ''}">${index + 1}</span>
+                <span class="mission-text">${mission}</span>
+            </div>
+        `;
+    }).join('');
+    
     document.getElementById('progressCount').textContent = reports.length;
     document.getElementById('progressTotal').textContent = CONFIG.requiredReports;
     
@@ -854,7 +868,6 @@ async function loadTeamHistory() {
                     ${new Date(report.timestamp).toLocaleString('ja-JP')}
                     ${report.fromGitHub ? '<span style="color: #28a745; font-size: 0.8em;"> 📡 GitHub</span>' : ''}
                 </div>
-                ${!report.fromGitHub ? `<button class="btn-delete" onclick="deleteReport('${report.timestamp}')">🗑️ 削除</button>` : ''}
             </div>
             ${report.missions ? `
                 <div class="report-missions">
@@ -875,6 +888,8 @@ async function loadTeamHistory() {
         </div>
     `).join('');
 }
+
+// レポート削除機能は削除されました（重複ミッションも正しく扱えるため不要）
 
 // 画像を拡大表示
 function openImage(dataUrl) {
