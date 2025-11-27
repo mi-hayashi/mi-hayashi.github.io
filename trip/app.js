@@ -364,8 +364,47 @@ async function selectTeam(team) {
     document.getElementById('progressCount').textContent = reports.length;
     document.getElementById('progressTotal').textContent = CONFIG.requiredReports;
     
+    // 達成済みミッション一覧を更新
+    updateCompletedMissions(reports, team);
+    
     showPage('uploadPage');
     loadTeamHistory();
+}
+
+// 達成済みミッション一覧を更新
+function updateCompletedMissions(reports, team) {
+    const completedMissions = new Set();
+    
+    reports.forEach(report => {
+        if (report.missions && Array.isArray(report.missions)) {
+            report.missions.forEach(m => {
+                completedMissions.add(m.index);
+            });
+        }
+    });
+    
+    const completedList = document.getElementById('completedMissionsList');
+    
+    if (completedMissions.size === 0) {
+        completedList.innerHTML = '<p style="text-align: center; color: #999;">まだ達成したミッションがありません</p>';
+        return;
+    }
+    
+    const missionList = team.missions.map((mission, index) => {
+        const isCompleted = completedMissions.has(index);
+        if (!isCompleted) return '';
+        
+        return `
+            <div style="display: flex; align-items: center; gap: 5px; padding: 5px 0; border-bottom: 1px solid #e0e0e0;">
+                <span style="font-size: 1.1em;">✅</span>
+                <span style="font-size: 0.9em; color: #52c41a; flex: 1;">
+                    ${index + 1}. ${mission}
+                </span>
+            </div>
+        `;
+    }).filter(item => item).join('');
+    
+    completedList.innerHTML = missionList || '<p style="text-align: center; color: #999;">まだ達成したミッションがありません</p>';
 }
 
 // ミッションの選択トグル
@@ -799,6 +838,9 @@ async function loadTeamHistory() {
     console.log('📂 チーム履歴読み込み開始:', currentTeam.name);
     const reports = await getTeamReports(currentTeam.id);
     console.log('📊 このチームのレポート数:', reports.length);
+    
+    // 達成済みミッション一覧も更新
+    updateCompletedMissions(reports, currentTeam);
     
     if (reports.length === 0) {
         historyList.innerHTML = '<p style="text-align: center; color: #999;">まだ報告がありません</p>';
