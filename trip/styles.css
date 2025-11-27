@@ -260,19 +260,31 @@ button, .file-label {
 
 .mission-item {
     display: flex;
-    align-items: flex-start;
-    margin-bottom: 6px;
-    padding: 6px 8px;
+    align-items: center;
+    padding: 12px 15px;
+    margin-bottom: 8px;
     background: white;
-    border-radius: 6px;
-    transition: all 0.2s;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
     cursor: pointer;
+    transition: all 0.2s;
+    min-height: 50px;
     user-select: none;
 }
 
 .mission-item:hover {
-    background: #f0f9ff;
-    transform: translateX(5px);
+    border-color: var(--primary);
+    background: #f0f7ff;
+    transform: translateX(3px);
+}
+
+.mission-item.completed {
+    background: #f0fff4;
+    border-color: #52c41a;
+}
+
+.mission-item.completed:hover {
+    background: #e6f9ec;
 }
 
 .mission-item:has(.mission-checkbox:checked) {
@@ -292,21 +304,26 @@ button, .file-label {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    height: 22px;
+    min-width: 28px;
+    height: 28px;
     background: var(--primary);
     color: white;
     border-radius: 50%;
-    font-size: 0.75em;
+    font-size: 0.85em;
     font-weight: bold;
-    margin-right: 8px;
+    margin-right: 10px;
     flex-shrink: 0;
+}
+
+.mission-number.completed {
+    background: #52c41a;
+    box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.2);
 }
 
 .mission-text {
     flex: 1;
-    line-height: 1.4;
-    font-size: 0.9em;
+    line-height: 1.5;
+    font-size: 0.95em;
     color: var(--text-primary);
 }
 
