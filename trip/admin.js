@@ -455,7 +455,6 @@ async function renderAdminDashboard() {
                     <strong>${report.teamName} ${report.fromGitHub ? '<span style="color: #28a745; font-size: 0.8em;">📡 GitHub</span>' : ''}</strong>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span class="report-time">${new Date(report.timestamp).toLocaleString('ja-JP')}</span>
-                        ${!report.fromGitHub ? `<button class="btn-delete-small" onclick="deleteReportAdmin('${report.timestamp}')">🗑️</button>` : ''}
                     </div>
                 </div>
                 ${report.missions ? `
