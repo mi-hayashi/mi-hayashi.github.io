@@ -8,6 +8,7 @@ const CONFIG = {
         {
             id: 1,
             name: 'うずしおぷくぷくチーム',
+            password: 'uzushio2025',
             logo: 'img/uzusiopukupuku.png',
             icon: '🌀',
             missions: [
@@ -31,6 +32,7 @@ const CONFIG = {
         {
             id: 2,
             name: 'たまねぎバスターズ',
+            password: 'tamanegi2025',
             logo: 'img/tamanegibaster.png',
             icon: '🧅',
             missions: [
@@ -54,6 +56,7 @@ const CONFIG = {
         {
             id: 3,
             name: 'なると金時レンジャー',
+            password: 'naruto2025',
             logo: 'img/narutokintokirenger.png',
             icon: '🍠',
             missions: [
@@ -77,6 +80,7 @@ const CONFIG = {
         {
             id: 4,
             name: 'おっきな橋のポーズ隊',
+            password: 'hashi2025',
             logo: 'img/okkinahasipose.png',
             icon: '🌉',
             missions: [
@@ -100,6 +104,7 @@ const CONFIG = {
         {
             id: 5,
             name: '海風ひゅるるんズ',
+            password: 'umikaze2025',
             logo: 'img/umikazehyururun.png',
             icon: '🌊',
             missions: [
@@ -123,6 +128,7 @@ const CONFIG = {
         {
             id: 6,
             name: 'とくしまニコニコ団',
+            password: 'nikoniko2025',
             logo: 'img/tokusimanikoniko.png',
             icon: '😊',
             missions: [
@@ -151,12 +157,11 @@ const CONFIG = {
     // 管理者パスワード
     adminPassword: 'kanri2025',
     
-    // GitHub連携設定(オプション)
+    // GitHub連携設定(GitHub Actions経由)
     github: {
-        enabled: true,  // GitHubに保存する場合はtrueに変更
-        repo: 'mi-hayashi/mi-hayashi.github.io',  // 例: 'yourname/mission-reports'
-        token: '',  // 実行時にデコード
-        _encoded: 'Z2hwX01QNjFkSzRaaFB5MUdKS0NvdDBTSTRWOGhSeU1BZTBibFBndw==',  // エンコード済みトークン
+        enabled: true,  // GitHub Actionsでworkflow_dispatchを使用
+        repo: 'mi-hayashi/mi-hayashi.github.io',
+        token: '',  // LocalStorageから読み込み(初回入力)
     }
 };
 
