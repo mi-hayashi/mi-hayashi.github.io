@@ -589,10 +589,32 @@ function fileToBase64(file) {
 
 // レポート保存(LocalStorage)
 async function saveReport(report) {
-    const localData = localStorage.getItem('missionReports');
-    const reports = localData ? JSON.parse(localData) : [];
-    reports.push(report);
-    localStorage.setItem('missionReports', JSON.stringify(reports));
+    try {
+        const localData = localStorage.getItem('missionReports');
+        let reports = [];
+        
+        if (localData) {
+            try {
+                reports = JSON.parse(localData);
+                // 配列でない場合は空配列に初期化
+                if (!Array.isArray(reports)) {
+                    console.warn('⚠️ LocalStorageのデータが配列ではありません。初期化します。');
+                    reports = [];
+                }
+            } catch (parseError) {
+                console.error('❌ LocalStorageのJSON解析エラー:', parseError);
+                console.warn('⚠️ LocalStorageを初期化します。');
+                reports = [];
+            }
+        }
+        
+        reports.push(report);
+        localStorage.setItem('missionReports', JSON.stringify(reports));
+        console.log('✅ レポート保存完了:', reports.length, '件');
+    } catch (error) {
+        console.error('❌ レポート保存エラー:', error);
+        throw error;
+    }
 }
 
 // 全レポート取得(LocalStorage + GitHub Issues)
