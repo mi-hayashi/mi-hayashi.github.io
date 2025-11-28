@@ -52,7 +52,7 @@ header h1 {
 }
 
 main {
-    padding: 15px;
+    padding: 5px;
     min-height: 300px;
 }
 
@@ -843,5 +843,6 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
 
 
