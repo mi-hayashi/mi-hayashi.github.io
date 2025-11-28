@@ -108,8 +108,6 @@ function showTokenModal() {
             showTokenStatus('⚠️ 無効なトークンです', 'error');
         }
     }
-    
-
 }
 
 // トークンステータス表示
@@ -371,47 +369,8 @@ async function selectTeam(team) {
     document.getElementById('progressCount').textContent = reports.length;
     document.getElementById('progressTotal').textContent = CONFIG.requiredReports;
     
-    // 達成済みミッション一覧を更新
-    updateCompletedMissions(reports, team);
-    
     showPage('uploadPage');
     loadTeamHistory();
-}
-
-// 達成済みミッション一覧を更新
-function updateCompletedMissions(reports, team) {
-    const completedMissions = new Set();
-    
-    reports.forEach(report => {
-        if (report.missions && Array.isArray(report.missions)) {
-            report.missions.forEach(m => {
-                completedMissions.add(m.index);
-            });
-        }
-    });
-    
-    const completedList = document.getElementById('completedMissionsList');
-    
-    if (completedMissions.size === 0) {
-        completedList.innerHTML = '<p style="text-align: center; color: #999;">まだ達成したミッションがありません</p>';
-        return;
-    }
-    
-    const missionList = team.missions.map((mission, index) => {
-        const isCompleted = completedMissions.has(index);
-        if (!isCompleted) return '';
-        
-        return `
-            <div style="display: flex; align-items: center; gap: 5px; padding: 5px 0; border-bottom: 1px solid #e0e0e0;">
-                <span style="font-size: 1.1em;">✅</span>
-                <span style="font-size: 0.9em; color: #52c41a; flex: 1;">
-                    ${index + 1}. ${mission}
-                </span>
-            </div>
-        `;
-    }).filter(item => item).join('');
-    
-    completedList.innerHTML = missionList || '<p style="text-align: center; color: #999;">まだ達成したミッションがありません</p>';
 }
 
 // ミッションの選択トグル
@@ -438,16 +397,7 @@ function handleFileSelect(event) {
     const files = Array.from(event.target.files);
     
     files.forEach(file => {
-        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
-            // 動画のサイズチェック
-            if (file.type.startsWith('video/')) {
-                const maxSize = 10 * 1024 * 1024; // 10MB
-                if (file.size > maxSize) {
-                    alert(`${file.name} は大きすぎます。\n動画は10MB以下にしてください。`);
-                    return;
-                }
-            }
-            
+        if (file.type.startsWith('image/')) {
             selectedFiles.push(file);
             addPreview(file);
         }
@@ -465,18 +415,10 @@ function addPreview(file) {
         const previewItem = document.createElement('div');
         previewItem.className = 'preview-item';
         
-        if (file.type.startsWith('video/')) {
-            previewItem.innerHTML = `
-                <video src="${e.target.result}" controls></video>
-                <div class="video-badge">🎥 動画</div>
-                <button class="remove-btn" onclick="removePreview(this, '${file.name}')">×</button>
-            `;
-        } else {
-            previewItem.innerHTML = `
-                <img src="${e.target.result}" alt="Preview">
-                <button class="remove-btn" onclick="removePreview(this, '${file.name}')">×</button>
-            `;
-        }
+        previewItem.innerHTML = `
+            <img src="${e.target.result}" alt="Preview">
+            <button class="remove-btn" onclick="removePreview(this, '${file.name}')">×</button>
+        `;
         
         previewArea.appendChild(previewItem);
     };
@@ -502,7 +444,7 @@ function updateSubmitButton() {
 // 達成報告送信
 async function submitReport() {
     if (selectedFiles.length === 0) {
-        alert('写真または動画を選択してください');
+        alert('写真を選択してください');
         return;
     }
     
@@ -686,18 +628,21 @@ async function getAllReports() {
             const githubReports = await fetchGitHubReports(lockedTeamId);
             console.log('📡 GitHub Issuesレポート数:', githubReports.length);
             
-            // 重複を除去してマージ
-            const allReports = [...localReports];
+            // GitHub優先で重複を除去してマージ
+            // 1. まずGitHubのレポートを全て追加
+            const allReports = [...githubReports];
+            
+            // 2. LocalStorageのレポートのうち、GitHubに存在しないもののみ追加
             let addedCount = 0;
-            githubReports.forEach(ghReport => {
-                // timestampで重複チェック
-                if (!allReports.find(r => r.timestamp === ghReport.timestamp)) {
-                    allReports.push(ghReport);
+            localReports.forEach(localReport => {
+                // timestampで重複チェック（GitHubに同じものがなければ追加）
+                if (!githubReports.find(r => r.timestamp === localReport.timestamp)) {
+                    allReports.push(localReport);
                     addedCount++;
                 }
             });
             
-            console.log('✅ 統合完了 - ローカル:', localReports.length, ', GitHub:', githubReports.length, ', 追加:', addedCount, ', 合計:', allReports.length);
+            console.log('✅ 統合完了 - GitHub優先:', githubReports.length, ', ローカルのみ:', addedCount, ', 合計:', allReports.length);
             
             return allReports.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         } catch (error) {
@@ -846,9 +791,6 @@ async function loadTeamHistory() {
     const reports = await getTeamReports(currentTeam.id);
     console.log('📊 このチームのレポート数:', reports.length);
     
-    // 達成済みミッション一覧も更新
-    updateCompletedMissions(reports, currentTeam);
-    
     if (reports.length === 0) {
         historyList.innerHTML = '<p style="text-align: center; color: #999;">まだ報告がありません</p>';
         return;
@@ -863,8 +805,7 @@ async function loadTeamHistory() {
                 </div>
             </div>
             ${report.missions ? `
-                <div class="report-missions">
-                    <strong>達成ミッション:</strong>
+                <div class="report-missions">                    
                     ${report.missions.map(m => `<span class="mission-badge">${m.index + 1}. ${m.text}</span>`).join('')}
                 </div>
             ` : ''}
@@ -1094,4 +1035,3 @@ function showLoading(show) {
         overlay.classList.remove('active');
     }
 }
-
