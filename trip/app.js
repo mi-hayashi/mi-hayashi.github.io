@@ -109,14 +109,7 @@ function showTokenModal() {
         }
     }
     
-    // スキップボタン
-    document.getElementById('skipToken').onclick = function() {
-        CONFIG.github.enabled = false;
-        modal.classList.remove('active');
-        if (html5QrCode) {
-            html5QrCode.stop();
-        }
-    };
+
 }
 
 // トークンステータス表示
@@ -1101,3 +1094,4 @@ function showLoading(show) {
         overlay.classList.remove('active');
     }
 }
+
