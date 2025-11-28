@@ -57,7 +57,40 @@
 
                 <div class="all-reports">
                     <h3>📊 全報告一覧</h3>
+
+                    <!-- チームフィルター -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                        <button class="filter-btn active" onclick="filterReports('all')">
+                            🌐 全チーム
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(1)">
+                            🌀 うずしおぷくぷく
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(2)">
+                            🧅 たまねぎバスターズ
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(3)">
+                            🍠 なると金時レンジャー
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(4)">
+                            🌉 おっきな橋のポーズ隊
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(5)">
+                            🌊 海風ひゅるるんズ
+                        </button>
+                        <button class="filter-btn" onclick="filterReports(6)">
+                            😊 とくしまニコニコ団
+                        </button>
+                    </div>
+
                     <div id="allReportsList"></div>
+
+                    <!-- もっと見るボタン -->
+                    <div id="loadMoreContainer" style="text-align: center; margin-top: 20px; display: none;">
+                        <button class="btn" onclick="loadMoreReports()" style="padding: 10px 30px;">
+                            📄 さらに表示
+                        </button>
+                    </div>
                 </div>
             </div>
         </main>
@@ -97,10 +130,6 @@
             </button>
 
             <div id="qrReader" style="display: none; margin-bottom: 15px;"></div>
-
-            <button id="skipToken" class="btn" style="width: 100%; background: #6c757d;">
-                スキップ (LocalStorageのみ)
-            </button>
 
             <div id="tokenStatus" style="margin-top: 15px; padding: 10px; border-radius: 5px; display: none;"></div>
         </div>
