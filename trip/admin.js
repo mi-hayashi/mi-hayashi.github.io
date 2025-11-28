@@ -251,8 +251,15 @@ async function getAllReports() {
             // 2. LocalStorageのレポートのうち、GitHubに存在しないもののみ追加
             let addedCount = 0;
             localReports.forEach(localReport => {
-                // timestampで重複チェック(GitHubに同じものがなければ追加)
-                if (!githubReports.find(r => r.timestamp === localReport.timestamp)) {
+                // timestampを秒単位で比較(ミリ秒の違いを吸収)
+                const localTime = Math.floor(new Date(localReport.timestamp).getTime() / 1000);
+                const isDuplicate = githubReports.some(ghReport => {
+                    const ghTime = Math.floor(new Date(ghReport.timestamp).getTime() / 1000);
+                    // 同じチーム、同じ秒(±5秒の誤差許容)なら重複と判定
+                    return ghReport.teamId === localReport.teamId && Math.abs(ghTime - localTime) <= 5;
+                });
+                
+                if (!isDuplicate) {
                     allReports.push(localReport);
                     addedCount++;
                 }
