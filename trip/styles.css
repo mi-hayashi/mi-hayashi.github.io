@@ -255,7 +255,7 @@ button, .file-label {
 /* アップロード画面 */
 .upload-area {
     background: var(--bg-card);
-    padding: 15px;
+    padding: 5px;
     border-radius: 10px;
     box-shadow: var(--shadow);
     margin-bottom: 15px;
@@ -448,7 +448,7 @@ textarea:focus {
 /* 報告履歴 */
 .report-history {
     background: var(--bg-card);
-    padding: 15px;
+    padding: 5px;
     border-radius: 12px;
     box-shadow: var(--shadow);
 }
@@ -843,4 +843,5 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
 
