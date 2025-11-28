@@ -267,8 +267,6 @@ button, .file-label {
     border-radius: 8px;
     margin-bottom: 15px;
     border-left: 3px solid var(--primary);
-    max-height: 300px;
-    overflow-y: auto;
 }
 
 .mission-info h3 {
@@ -845,3 +843,4 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
