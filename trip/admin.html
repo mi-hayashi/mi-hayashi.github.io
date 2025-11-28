@@ -59,28 +59,18 @@
                     <h3>📊 全報告一覧</h3>
 
                     <!-- チームフィルター -->
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                        <button class="filter-btn active" onclick="filterReports('all')">
-                            🌐 全チーム
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(1)">
-                            🌀 うずしおぷくぷく
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(2)">
-                            🧅 たまねぎバスターズ
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(3)">
-                            🍠 なると金時レンジャー
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(4)">
-                            🌉 おっきな橋のポーズ隊
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(5)">
-                            🌊 海風ひゅるるんズ
-                        </button>
-                        <button class="filter-btn" onclick="filterReports(6)">
-                            😊 とくしまニコニコ団
-                        </button>
+                    <div style="margin-bottom: 15px;">
+                        <label for="teamFilter" style="font-weight: 500; margin-right: 10px;">チーム絞り込み:</label>
+                        <select id="teamFilter" onchange="filterReports(this.value)"
+                            style="padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.9em; cursor: pointer; min-width: 200px;">
+                            <option value="all">🌐 全チーム</option>
+                            <option value="1">🌀 うずしおぷくぷくチーム</option>
+                            <option value="2">🧅 たまねぎバスターズ</option>
+                            <option value="3">🍠 なると金時レンジャー</option>
+                            <option value="4">🌉 おっきな橋のポーズ隊</option>
+                            <option value="5">🌊 海風ひゅるるんズ</option>
+                            <option value="6">😊 とくしまニコニコ団</option>
+                        </select>
                     </div>
 
                     <div id="allReportsList"></div>
@@ -105,11 +95,10 @@
         <p>読み込み中...</p>
     </div>
 
-    <!-- 画像・動画拡大モーダル -->
+    <!-- 画像拡大モーダル -->
     <div id="mediaModal" class="media-modal" onclick="closeModal()">
         <span class="modal-close">&times;</span>
         <img id="modalImage" class="modal-content">
-        <video id="modalVideo" class="modal-content" controls></video>
     </div>
 
     <!-- トークン設定モーダル -->
