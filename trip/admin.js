@@ -244,16 +244,21 @@ async function getAllReports() {
             const githubReports = await fetchGitHubReports();
             console.log('📡 GitHub Issuesレポート数:', githubReports.length);
             
-            const allReports = [...localReports];
+            // GitHub優先で重複を除去してマージ
+            // 1. まずGitHubのレポートを全て追加
+            const allReports = [...githubReports];
+            
+            // 2. LocalStorageのレポートのうち、GitHubに存在しないもののみ追加
             let addedCount = 0;
-            githubReports.forEach(ghReport => {
-                if (!allReports.find(r => r.timestamp === ghReport.timestamp)) {
-                    allReports.push(ghReport);
+            localReports.forEach(localReport => {
+                // timestampで重複チェック(GitHubに同じものがなければ追加)
+                if (!githubReports.find(r => r.timestamp === localReport.timestamp)) {
+                    allReports.push(localReport);
                     addedCount++;
                 }
             });
             
-            console.log('✅ 統合完了 - ローカル:', localReports.length, ', GitHub:', githubReports.length, ', 追加:', addedCount, ', 合計:', allReports.length);
+            console.log('✅ 統合完了 - GitHub優先:', githubReports.length, ', ローカルのみ:', addedCount, ', 合計:', allReports.length);
             
             return allReports.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         } catch (error) {
@@ -341,8 +346,7 @@ function parseIssueBody(issue, team) {
         for (const match of imageMatches) {
             images.push({
                 data: match[1],
-                name: 'image.jpg',
-                isVideo: false
+                name: 'image.jpg'
             });
         }
         
@@ -350,7 +354,7 @@ function parseIssueBody(issue, team) {
             teamId: team.id,
             teamName: team.name,
             timestamp: timestamp,
-            images: images.length > 0 ? images : [{ data: '', name: '', isVideo: false }],
+            images: images.length > 0 ? images : [{ data: '', name: '' }],
             comment: comment,
             missions: missions,
             fromGitHub: true
@@ -474,19 +478,14 @@ function renderReportsList() {
                 </div>
             </div>
             ${report.missions ? `
-                <div class="report-missions">
-                    <strong>達成ミッション:</strong>
+                <div class="report-missions">                    
                     ${report.missions.map(m => `<span class="mission-badge">${m.index + 1}. ${m.text}</span>`).join('')}
                 </div>
             ` : ''}
             <div class="report-images">
-                ${report.images.filter(img => img.data).map(img => {
-                    if (img.isVideo) {
-                        return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
-                    } else {
-                        return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
-                    }
-                }).join('')}
+                ${report.images.filter(img => img.data).map(img => 
+                    `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`
+                ).join('')}
             </div>
             ${report.comment && report.comment !== 'なし' ? `<div class="report-comment">"${report.comment}"</div>` : ''}
         </div>
@@ -503,14 +502,8 @@ function renderReportsList() {
 
 // チームフィルター
 function filterReports(teamId) {
-    currentFilter = teamId;
+    currentFilter = teamId === 'all' ? 'all' : parseInt(teamId);
     displayCount = 10; // リセット
-    
-    // ボタンのアクティブ状態を更新
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
     
     renderReportsList();
 }
