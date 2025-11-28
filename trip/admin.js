@@ -3,6 +3,9 @@ let isAdminLoggedIn = false;
 let autoRefreshTimer = null;
 let lastReportCount = 0;
 let lastUpdateTime = null;
+let allReportsCache = []; // 全報告のキャッシュ
+let currentFilter = 'all'; // 現在のフィルター
+let displayCount = 10; // 表示件数
 
 // 初期化
 document.addEventListener('DOMContentLoaded', () => {
@@ -107,14 +110,6 @@ function showTokenModal() {
             showTokenStatus('⚠️ 無効なトークンです', 'error');
         }
     }
-    
-    document.getElementById('skipToken').onclick = function() {
-        CONFIG.github.enabled = false;
-        modal.classList.remove('active');
-        if (html5QrCode) {
-            html5QrCode.stop();
-        }
-    };
 }
 
 // トークンステータス表示
@@ -445,37 +440,85 @@ async function renderAdminDashboard() {
         `;
     }).join('');
     
+    // 全報告をキャッシュ
+    allReportsCache = allReports.reverse();
+    
+    // 報告一覧を表示（フィルター適用）
+    renderReportsList();
+}
+
+// 報告一覧を表示
+function renderReportsList() {
     const allReportsList = document.getElementById('allReportsList');
-    if (allReports.length === 0) {
-        allReportsList.innerHTML = '<p style="text-align: center; color: #999;">まだ報告がありません</p>';
-    } else {
-        allReportsList.innerHTML = allReports.reverse().map(report => `
-            <div class="report-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <strong>${report.teamName} ${report.fromGitHub ? '<span style="color: #28a745; font-size: 0.8em;">📡 GitHub</span>' : ''}</strong>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="report-time">${new Date(report.timestamp).toLocaleString('ja-JP')}</span>
-                    </div>
-                </div>
-                ${report.missions ? `
-                    <div class="report-missions">
-                        <strong>達成ミッション:</strong>
-                        ${report.missions.map(m => `<span class="mission-badge">${m.index + 1}. ${m.text}</span>`).join('')}
-                    </div>
-                ` : ''}
-                <div class="report-images">
-                    ${report.images.filter(img => img.data).map(img => {
-                        if (img.isVideo) {
-                            return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
-                        } else {
-                            return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
-                        }
-                    }).join('')}
-                </div>
-                ${report.comment && report.comment !== 'なし' ? `<div class="report-comment">"${report.comment}"</div>` : ''}
-            </div>
-        `).join('');
+    
+    // フィルター適用
+    let filteredReports = currentFilter === 'all' 
+        ? allReportsCache 
+        : allReportsCache.filter(r => r.teamId === currentFilter);
+    
+    if (filteredReports.length === 0) {
+        allReportsList.innerHTML = '<p style="text-align: center; color: #999;">報告がありません</p>';
+        document.getElementById('loadMoreContainer').style.display = 'none';
+        return;
     }
+    
+    // 表示する報告を取得
+    const displayReports = filteredReports.slice(0, displayCount);
+    
+    allReportsList.innerHTML = displayReports.map(report => `
+        <div class="report-item">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <strong>${report.teamName} ${report.fromGitHub ? '<span style="color: #28a745; font-size: 0.8em;">📡 GitHub</span>' : ''}</strong>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="report-time">${new Date(report.timestamp).toLocaleString('ja-JP')}</span>
+                </div>
+            </div>
+            ${report.missions ? `
+                <div class="report-missions">
+                    <strong>達成ミッション:</strong>
+                    ${report.missions.map(m => `<span class="mission-badge">${m.index + 1}. ${m.text}</span>`).join('')}
+                </div>
+            ` : ''}
+            <div class="report-images">
+                ${report.images.filter(img => img.data).map(img => {
+                    if (img.isVideo) {
+                        return `<video src="${img.data}" onclick="openVideo('${img.data}'); event.stopPropagation();"></video>`;
+                    } else {
+                        return `<img src="${img.data}" alt="${img.name}" onclick="openImage('${img.data}'); event.stopPropagation();">`;
+                    }
+                }).join('')}
+            </div>
+            ${report.comment && report.comment !== 'なし' ? `<div class="report-comment">"${report.comment}"</div>` : ''}
+        </div>
+    `).join('');
+    
+    // 「もっと見る」ボタンの表示制御
+    const loadMoreContainer = document.getElementById('loadMoreContainer');
+    if (filteredReports.length > displayCount) {
+        loadMoreContainer.style.display = 'block';
+    } else {
+        loadMoreContainer.style.display = 'none';
+    }
+}
+
+// チームフィルター
+function filterReports(teamId) {
+    currentFilter = teamId;
+    displayCount = 10; // リセット
+    
+    // ボタンのアクティブ状態を更新
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    renderReportsList();
+}
+
+// さらに表示
+function loadMoreReports() {
+    displayCount += 10;
+    renderReportsList();
 }
 
 // 管理者画面から報告を削除
