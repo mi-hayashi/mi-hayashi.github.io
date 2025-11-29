@@ -1241,116 +1241,139 @@ ${missionsText}
     // テキスト部分のサイズ
     const textSize = textPart.length + footer.length;
     const maxTotalSize = 65000; // 安全マージンを持って65000文字
-    const maxImageSize = maxTotalSize - textSize - 500; // さらに500文字の余裕
+    let maxImageSize = maxTotalSize - textSize - 500; // さらに500文字の余裕
     
     console.log(`📊 Issue本文計算: テキスト部分=${textSize}文字, 画像用=${maxImageSize}文字`);
     
-    // 画像をGitHub用に圧縮(計算した制限で)
-    const compressedImages = await Promise.all(
-        report.images.map(img => compressImageForGitHub(img, maxImageSize))
-    );
-    
-    // 画像を本文に埋め込む(Base64形式)
-    const imagesText = compressedImages.map((img, index) => {
-        if (img.isVideo) {
-            return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
-        } else if (img.data) {
-            return `### 📸 写真\n\n![${img.name}](${img.data})\n`;
-        } else {
-            return '';
-        }
-    }).join('\n');
-    
-    const body = textPart + imagesText + footer;
-    
-    // 最終チェック
-    console.log(`📏 最終Issue本文サイズ: ${body.length}文字 (制限: 65536文字)`);
-    
-    if (body.length > 65536) {
-        console.error(`❌ Issue本文が制限超過: ${body.length}文字 > 65536文字`);
-    }
-
     const labels = [`mission-report`, `team-${report.teamId}`];
     
-    try {
-        // GitHub API で直接Issueを作成
-        const response = await fetch(
-            `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
-            {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/vnd.github+json',
-                    'Authorization': `token ${CONFIG.github.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    title: title,
-                    body: body,
-                    labels: labels
-                })
-            }
+    // 画像を段階的に圧縮して送信を試みる
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (attempts < maxAttempts) {
+        // 画像をGitHub用に圧縮(計算した制限で)
+        const compressedImages = await Promise.all(
+            report.images.map(img => compressImageForGitHub(img, maxImageSize))
         );
         
-        if (!response.ok) {
-            let errorData = null;
-            let errorText = '';
-            try {
-                errorText = await response.text();
-                try {
-                    errorData = JSON.parse(errorText);
-                } catch (jsonError) {
-                    errorData = { rawResponse: errorText };
-                }
-            } catch (parseError) {
-                console.error('GitHub API エラー詳細の解析に失敗:', parseError);
-            }
-            console.error('GitHub API エラー詳細:', errorData);
-
-            // エラーログに詳細を送信(ユーザーには表示しない)
-            await sendErrorLog('GitHub Issue作成失敗', report, {
-                status: response.status,
-                statusText: response.statusText,
-                errorData: errorData,
-                headers: {
-                    'x-ratelimit-limit': response.headers.get('x-ratelimit-limit'),
-                    'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining'),
-                    'x-ratelimit-reset': response.headers.get('x-ratelimit-reset')
-                }
-            });
-
-            if (response.status === 401) {
-                handleGitHubAuthFailure('⚠️ GitHubトークンが無効か期限切れです。再設定してください。');
-            } else if (response.status === 403) {
-                handleGitHubAuthFailure('⚠️ GitHubトークンにIssues作成権限がありません。repo権限を付与してください。');
-            } else if (response.status === 404) {
-                showRefreshStatus('⚠️ 指定されたリポジトリが見つかりません。config.jsのgithub.repoを確認してください。', 'error');
-            } else if (response.status === 410) {
-                showRefreshStatus('⚠️ リポジトリでIssuesが無効です。Settings > General > FeaturesでIssuesを有効化してください。', 'error');
-            } else if (response.status === 422) {
-                showRefreshStatus('⚠️ Issue本文がGitHubの制限を超えました。画像枚数やサイズを減らしてください。', 'error');
+        // 画像を本文に埋め込む(Base64形式)
+        const imagesText = compressedImages.map((img, index) => {
+            if (img.isVideo) {
+                return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
+            } else if (img.data) {
+                return `### 📸 写真\n\n![${img.name}](${img.data})\n`;
             } else {
-                showRefreshStatus(`⚠️ GitHub APIエラー(${response.status})が発生しました。ネットワークと設定を確認してください。`, 'error');
+                return '';
             }
-
-            return false; // 失敗を返す
+        }).join('\n');
+        
+        const body = textPart + imagesText + footer;
+        
+        console.log(`📏 試行${attempts + 1}: Issue本文サイズ=${body.length}文字 (制限: 65536文字)`);
+        
+        // 制限を超えている場合は画像サイズをさらに削減
+        if (body.length > 65536) {
+            console.log(`⚠️ サイズ超過。画像サイズを削減します...`);
+            maxImageSize = Math.floor(maxImageSize * 0.8); // 20%削減
+            attempts++;
+            continue;
         }
         
-        const issue = await response.json();
-        console.log('✅ GitHub Issueを作成しました:', issue.html_url);
-        return true; // 成功を返す
-        
-    } catch (error) {
-        console.error('❌ GitHub保存エラー:', error);
-        console.warn('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
-        
-        // エラーログに詳細を送信(ユーザーには表示しない)
-        await sendErrorLog('GitHub送信エラー(例外)', report, {
-            errorMessage: error.message,
-            errorStack: error.stack
-        });
-        
-        return false; // 失敗を返す
+        try {
+            // GitHub API で直接Issueを作成
+            const response = await fetch(
+                `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `token ${CONFIG.github.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        body: body,
+                        labels: labels
+                    })
+                }
+            );
+            
+            if (!response.ok) {
+                let errorData = null;
+                let errorText = '';
+                try {
+                    errorText = await response.text();
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (jsonError) {
+                        errorData = { rawResponse: errorText };
+                    }
+                } catch (parseError) {
+                    console.error('GitHub API エラー詳細の解析に失敗:', parseError);
+                }
+                console.error('GitHub API エラー詳細:', errorData);
+
+                // 422エラー(サイズ超過)の場合は再試行
+                if (response.status === 422 && attempts < maxAttempts - 1) {
+                    console.log(`⚠️ 422エラー。画像サイズを削減して再試行...`);
+                    maxImageSize = Math.floor(maxImageSize * 0.7); // 30%削減
+                    attempts++;
+                    continue;
+                }
+
+                // エラーログに詳細を送信(ユーザーには表示しない)
+                await sendErrorLog('GitHub Issue作成失敗', report, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorData: errorData,
+                    bodyLength: body.length,
+                    attempts: attempts + 1,
+                    headers: {
+                        'x-ratelimit-limit': response.headers.get('x-ratelimit-limit'),
+                        'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining'),
+                        'x-ratelimit-reset': response.headers.get('x-ratelimit-reset')
+                    }
+                });
+
+                if (response.status === 401) {
+                    handleGitHubAuthFailure('⚠️ GitHubトークンが無効か期限切れです。再設定してください。');
+                } else if (response.status === 403) {
+                    handleGitHubAuthFailure('⚠️ GitHubトークンにIssues作成権限がありません。repo権限を付与してください。');
+                } else if (response.status === 404) {
+                    showRefreshStatus('⚠️ 指定されたリポジトリが見つかりません。config.jsのgithub.repoを確認してください。', 'error');
+                } else if (response.status === 410) {
+                    showRefreshStatus('⚠️ リポジトリでIssuesが無効です。Settings > General > FeaturesでIssuesを有効化してください。', 'error');
+                }
+
+                return false; // 失敗を返す
+            }
+            
+            const issue = await response.json();
+            console.log('✅ GitHub Issueを作成しました:', issue.html_url);
+            return true; // 成功を返す
+            
+        } catch (error) {
+            console.error('❌ GitHub保存エラー:', error);
+            
+            // エラーログに詳細を送信(ユーザーには表示しない)
+            await sendErrorLog('GitHub送信エラー(例外)', report, {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                attempts: attempts + 1
+            });
+            
+            return false; // 失敗を返す
+        }
     }
+    
+    // 最大試行回数に達した場合
+    console.error(`❌ ${maxAttempts}回の試行後も送信失敗`);
+    await sendErrorLog('GitHub送信失敗(最大試行回数)', report, {
+        maxAttempts: maxAttempts,
+        finalImageSize: maxImageSize
+    });
+    return false;
 }
 
 // ページ切り替え
