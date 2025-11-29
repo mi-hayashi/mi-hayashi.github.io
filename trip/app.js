@@ -581,10 +581,8 @@ async function submitReport() {
         } else {
             report.syncStatus = 'local-only';
             await updateReportSyncStatus(report.timestamp, 'local-only');
-            // トークンなしの場合もログ送信
-            if (CONFIG.github.enabled) {
-                await sendErrorLog('トークンなし', report);
-            }
+            // トークンなしの場合はエラーログ送信不可(トークンが必要なため)
+            console.warn('⚠️ トークンなしでローカル保存のみ実行されました');
         }
         
         // リセット
@@ -968,7 +966,7 @@ function closeModal() {
 async function saveToGitHub(report) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
         console.log('GitHub連携が無効です');
-        return;
+        return false; // 失敗として扱う
     }
     
     // ミッション情報を整形
