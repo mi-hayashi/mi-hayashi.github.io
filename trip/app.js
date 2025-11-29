@@ -72,14 +72,22 @@ function showTokenModal() {
             const result = await html5QrCodeScanner.scanFile(file, true);
             
             if (result && result.startsWith('ghp_')) {
-                CONFIG.github.token = result;
-                localStorage.setItem('github_token', result);
-                showTokenStatus('✅ トークンを保存しました!', 'success');
-                setTimeout(() => {
-                    modal.classList.remove('active');
-                }, 1500);
+                // トークンの有効性を検証
+                showTokenStatus('トークンを検証中...', 'success');
+                const isValid = await validateGitHubToken(result);
+                
+                if (isValid) {
+                    CONFIG.github.token = result;
+                    localStorage.setItem('github_token', result);
+                    showTokenStatus('✅ トークンを保存しました!', 'success');
+                    setTimeout(() => {
+                        modal.classList.remove('active');
+                    }, 1500);
+                } else {
+                    showTokenStatus('⚠️ トークンが無効です。正しいQRコードをスキャンしてください', 'error');
+                }
             } else {
-                showTokenStatus('⚠️ 無効なトークンです', 'error');
+                showTokenStatus('⚠️ GitHubトークンではありません', 'error');
             }
         } catch (err) {
             showTokenStatus('❌ QRコードの読み取りに失敗しました', 'error');
@@ -91,22 +99,67 @@ function showTokenModal() {
     };
     
     // スキャン成功
-    function onScanSuccess(decodedText) {
+    async function onScanSuccess(decodedText) {
         if (decodedText.startsWith('ghp_')) {
-            CONFIG.github.token = decodedText;
-            localStorage.setItem('github_token', decodedText);
+            // トークンの有効性を検証
+            showTokenStatus('トークンを検証中...', 'success');
+            const isValid = await validateGitHubToken(decodedText);
             
-            if (html5QrCode) {
-                html5QrCode.stop();
+            if (isValid) {
+                CONFIG.github.token = decodedText;
+                localStorage.setItem('github_token', decodedText);
+                
+                if (html5QrCode) {
+                    html5QrCode.stop();
+                }
+                
+                showTokenStatus('✅ トークンを保存しました!', 'success');
+                setTimeout(() => {
+                    modal.classList.remove('active');
+                }, 1500);
+            } else {
+                showTokenStatus('⚠️ トークンが無効です。正しいQRコードをスキャンしてください', 'error');
             }
-            
-            showTokenStatus('✅ トークンを保存しました!', 'success');
-            setTimeout(() => {
-                modal.classList.remove('active');
-            }, 1500);
         } else {
-            showTokenStatus('⚠️ 無効なトークンです', 'error');
+            showTokenStatus('⚠️ GitHubトークンではありません', 'error');
         }
+    }
+}
+
+// GitHubトークンの有効性を検証
+async function validateGitHubToken(token) {
+    try {
+        // GitHub APIで認証テスト
+        const response = await fetch('https://api.github.com/user', {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github+json'
+            }
+        });
+        
+        if (!response.ok) {
+            console.error('❌ トークン検証失敗:', response.status);
+            return false;
+        }
+        
+        // レポジトリへのアクセス権も確認
+        const repoResponse = await fetch(`https://api.github.com/repos/${CONFIG.github.repo}`, {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github+json'
+            }
+        });
+        
+        if (!repoResponse.ok) {
+            console.error('❌ レポジトリアクセス権限なし:', repoResponse.status);
+            return false;
+        }
+        
+        console.log('✅ トークン検証成功');
+        return true;
+    } catch (error) {
+        console.error('❌ トークン検証エラー:', error);
+        return false;
     }
 }
 
@@ -148,6 +201,9 @@ function startAutoRefresh() {
     autoRefreshTimer = setInterval(async () => {
         console.log('🔄 自動リフレッシュ実行中...');
         await refreshData(false); // 通知なしで更新
+        
+        // バックグラウンドで未同期レポートを同期
+        await autoSyncInBackground();
     }, 30000); // 30秒
     
     console.log('✅ 自動リフレッシュ開始 (30秒ごと)');
@@ -158,6 +214,21 @@ async function manualRefresh() {
     console.log('🔄 手動リフレッシュ実行中...');
     showRefreshStatus('更新中...', 'loading');
     await refreshData(true); // 通知ありで更新
+    
+    // 未同期レポートも同時に同期
+    await autoSyncInBackground();
+}
+
+// バックグラウンドで自動同期(表面上わからないように)
+async function autoSyncInBackground() {
+    try {
+        const result = await syncUnsyncedReports();
+        if (result.success > 0 || result.failed > 0) {
+            console.log(`📤 バックグラウンド同期完了 - 成功: ${result.success}, 失敗: ${result.failed}`);
+        }
+    } catch (error) {
+        console.error('❌ バックグラウンド同期エラー:', error);
+    }
 }
 
 // データをリフレッシュ(共通処理)
@@ -463,6 +534,15 @@ async function submitReport() {
         return;
     }
     
+    // トークンチェック:トークンがない場合は入力を促す
+    if (CONFIG.github.enabled && !CONFIG.github.token) {
+        const needToken = await requestTokenIfNeeded();
+        if (!needToken) {
+            // ユーザーがキャンセルした場合でもローカル保存は継続
+            console.warn('⚠️ トークンなしでローカル保存のみ実行します');
+        }
+    }
+    
     const comment = document.getElementById('commentInput').value;
     
     showLoading(true);
@@ -479,15 +559,32 @@ async function submitReport() {
             timestamp: new Date().toISOString(),
             images: imageDataArray,
             comment: comment,
-            missions: selectedMissions
+            missions: selectedMissions,
+            syncStatus: 'pending' // 同期待ち
         };
         
         // LocalStorageに保存
         await saveReport(report);
         
         // GitHub Issuesにも保存(オプション)
-        if (CONFIG.github.enabled) {
-            await saveToGitHub(report);
+        if (CONFIG.github.enabled && CONFIG.github.token) {
+            const syncSuccess = await saveToGitHub(report);
+            if (syncSuccess) {
+                report.syncStatus = 'synced';
+                await updateReportSyncStatus(report.timestamp, 'synced');
+            } else {
+                report.syncStatus = 'failed';
+                await updateReportSyncStatus(report.timestamp, 'failed');
+                // エラーログを送信
+                await sendErrorLog('GitHub送信失敗', report);
+            }
+        } else {
+            report.syncStatus = 'local-only';
+            await updateReportSyncStatus(report.timestamp, 'local-only');
+            // トークンなしの場合もログ送信
+            if (CONFIG.github.enabled) {
+                await sendErrorLog('トークンなし', report);
+            }
         }
         
         // リセット
@@ -938,10 +1035,12 @@ ${imagesText}
         }
         
         console.log('✅ GitHub Actionsトリガー成功 - 数秒後にIssueが作成されます');
+        return true; // 成功
         
     } catch (error) {
         console.error('❌ GitHub保存エラー:', error);
-        alert('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
+        console.warn('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
+        return false; // 失敗
     }
 }
 
@@ -1041,5 +1140,177 @@ function showLoading(show) {
         overlay.classList.add('active');
     } else {
         overlay.classList.remove('active');
+    }
+}
+
+// トークンが必要な場合にリクエスト
+function requestTokenIfNeeded() {
+    return new Promise((resolve) => {
+        if (CONFIG.github.token) {
+            resolve(true);
+            return;
+        }
+        
+        const modal = document.getElementById('tokenModal');
+        if (!modal) {
+            resolve(false);
+            return;
+        }
+        
+        // モーダルを表示
+        showTokenModal();
+        
+        // モーダルが閉じられるのを監視
+        const checkInterval = setInterval(() => {
+            if (!modal.classList.contains('active')) {
+                clearInterval(checkInterval);
+                resolve(!!CONFIG.github.token);
+            }
+        }, 500);
+        
+        // 30秒後にタイムアウト
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            resolve(!!CONFIG.github.token);
+        }, 30000);
+    });
+}
+
+// レポートの同期ステータスを更新
+async function updateReportSyncStatus(timestamp, status) {
+    try {
+        const localData = localStorage.getItem('missionReports');
+        if (!localData) return;
+        
+        const reports = JSON.parse(localData);
+        const report = reports.find(r => r.timestamp === timestamp);
+        if (report) {
+            report.syncStatus = status;
+            localStorage.setItem('missionReports', JSON.stringify(reports));
+            console.log(`✅ 同期ステータス更新: ${status}`);
+        }
+    } catch (error) {
+        console.error('❌ 同期ステータス更新エラー:', error);
+    }
+}
+
+// 未同期レポートを取得
+function getUnsyncedReports() {
+    try {
+        const localData = localStorage.getItem('missionReports');
+        if (!localData) return [];
+        
+        const reports = JSON.parse(localData);
+        // syncStatusがない(古い報告)か、syncedでない報告を全て取得
+        return reports.filter(r => !r.syncStatus || r.syncStatus !== 'synced');
+    } catch (error) {
+        console.error('❌ 未同期レポート取得エラー:', error);
+        return [];
+    }
+}
+
+// 未同期レポートを自動同期
+async function syncUnsyncedReports() {
+    if (!CONFIG.github.enabled || !CONFIG.github.token) {
+        console.log('⚠️ GitHub連携が無効、または トークンがありません');
+        return {success: 0, failed: 0};
+    }
+    
+    const unsyncedReports = getUnsyncedReports();
+    if (unsyncedReports.length === 0) {
+        console.log('✅ 未同期レポートはありません');
+        return {success: 0, failed: 0};
+    }
+    
+    console.log(`🔄 ${unsyncedReports.length}件の未同期レポートを送信中...`);
+    
+    let successCount = 0;
+    let failedCount = 0;
+    
+    for (const report of unsyncedReports) {
+        try {
+            const success = await saveToGitHub(report);
+            if (success) {
+                await updateReportSyncStatus(report.timestamp, 'synced');
+                successCount++;
+            } else {
+                await updateReportSyncStatus(report.timestamp, 'failed');
+                failedCount++;
+            }
+            // API制限対策で少し待機
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+            console.error('❌ 同期エラー:', error);
+            failedCount++;
+        }
+    }
+    
+    console.log(`✅ 同期完了 - 成功: ${successCount}, 失敗: ${failedCount}`);
+    return {success: successCount, failed: failedCount};
+}
+
+// エラーログをGitHubに送信(匿名化)
+async function sendErrorLog(errorType, report) {
+    if (!CONFIG.github.enabled || !CONFIG.github.token) {
+        return;
+    }
+    
+    try {
+        // 匿名化されたエラー情報
+        const errorInfo = {
+            type: errorType,
+            timestamp: new Date().toISOString(),
+            teamId: report.teamId,
+            browser: navigator.userAgent,
+            hasToken: !!CONFIG.github.token,
+            reportTimestamp: report.timestamp,
+            imageCount: report.images?.length || 0,
+            missionCount: report.missions?.length || 0
+        };
+        
+        const title = `[エラーログ] ${errorType} - ${new Date().toLocaleDateString('ja-JP')}`;
+        const body = `## 同期エラーログ (自動送信)
+
+**エラー種別:** ${errorType}
+**発生日時:** ${errorInfo.timestamp}
+**チームID:** ${errorInfo.teamId}
+**ブラウザ情報:** ${errorInfo.browser}
+**トークン有無:** ${errorInfo.hasToken ? '有' : '無'}
+**レポート日時:** ${errorInfo.reportTimestamp}
+**画像数:** ${errorInfo.imageCount}
+**ミッション数:** ${errorInfo.missionCount}
+
+---
+*このログは自動送信されています*`;
+        
+        const labels = 'error-log,auto-generated';
+        
+        // GitHub Actions経由で送信
+        const response = await fetch(
+            `https://api.github.com/repos/${CONFIG.github.repo}/actions/workflows/create_issue.yml/dispatches`,
+            {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `token ${CONFIG.github.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ref: 'main',
+                    inputs: {
+                        title: title,
+                        body: body,
+                        labels: labels
+                    }
+                })
+            }
+        );
+        
+        if (response.ok) {
+            console.log('📝 エラーログをGitHubに送信しました');
+        }
+    } catch (error) {
+        console.error('❌ エラーログ送信失敗:', error);
+        // エラーログの送信失敗は無視(無限ループ防止)
     }
 }
