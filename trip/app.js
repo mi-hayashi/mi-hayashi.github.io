@@ -1058,8 +1058,8 @@ async function compressImageForGitHub(imageObj) {
     }
     
     try {
-        // Base64のサイズを計算(65536文字制限、1枚のみなので50000文字まで許容)
-        const maxChars = 50000;
+        // Base64のサイズを計算(65536文字制限、安全のため45000文字まで)
+        const maxChars = 45000;
         
         if (imageObj.data.length <= maxChars) {
             // すでに小さい場合はそのまま
@@ -1074,12 +1074,14 @@ async function compressImageForGitHub(imageObj) {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // 初期サイズとして元の画像サイズから開始
+                // 初期サイズと品質の設定
                 let maxSize = Math.max(img.width, img.height);
-                let quality = 0.8; // 初期品質80%
+                let quality = 0.9; // 初期品質90%から開始
                 let compressedData = '';
                 let attempts = 0;
-                const maxAttempts = 20; // 最大20回試行
+                const maxAttempts = 50; // 最大50回試行
+                
+                console.log(`🖼️ 元画像: ${img.width}x${img.height}px, データ量: ${imageObj.data.length}文字`);
                 
                 // 圧縮を繰り返して必ず制限内に収める
                 while (attempts < maxAttempts) {
@@ -1103,11 +1105,11 @@ async function compressImageForGitHub(imageObj) {
                     // 圧縮実行
                     compressedData = canvas.toDataURL('image/jpeg', quality);
                     
-                    console.log(`🔄 圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
+                    console.log(`🔄 GitHub圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
                     
                     // 制限内に収まったら終了
                     if (compressedData.length <= maxChars) {
-                        console.log(`✅ 画像圧縮成功: ${imageObj.name} (${imageObj.data.length} → ${compressedData.length} 文字)`);
+                        console.log(`✅ GitHub画像圧縮成功: ${imageObj.name} (${imageObj.data.length} → ${compressedData.length} 文字)`);
                         resolve({
                             data: compressedData,
                             name: imageObj.name,
@@ -1116,21 +1118,60 @@ async function compressImageForGitHub(imageObj) {
                         return;
                     }
                     
-                    // 次の試行のパラメータ調整
-                    if (quality > 0.3) {
-                        // まずは品質を下げる(30%まで)
-                        quality -= 0.1;
+                    // 次の試行のパラメータ調整(段階的に厳しく)
+                    if (attempts < 10) {
+                        // フェーズ1: 品質を下げる (90% → 50%)
+                        quality -= 0.05;
+                    } else if (attempts < 20) {
+                        // フェーズ2: サイズを少し縮小 + 品質を下げる
+                        maxSize = maxSize * 0.9; // 10%ずつ縮小
+                        quality -= 0.03;
+                        if (quality < 0.2) quality = 0.2; // 最低20%は維持
+                    } else if (attempts < 35) {
+                        // フェーズ3: サイズを大きく縮小 + 品質低め
+                        maxSize = maxSize * 0.8; // 20%ずつ縮小
+                        quality -= 0.02;
+                        if (quality < 0.1) quality = 0.1; // 最低10%
                     } else {
-                        // 品質が十分低くなったらサイズを縮小
-                        maxSize = maxSize * 0.85; // 15%ずつ縮小
-                        quality = 0.7; // 品質を少し戻す
+                        // フェーズ4: 最終段階 - 激しく縮小
+                        maxSize = maxSize * 0.7; // 30%ずつ縮小
+                        quality = 0.05; // 品質5%固定
+                        
+                        // 最小サイズ制限(100px以下にはしない)
+                        if (maxSize < 100) {
+                            maxSize = 100;
+                            quality = Math.max(0.01, quality - 0.01); // 品質を1%まで下げる
+                        }
                     }
                     
                     attempts++;
                 }
                 
-                // 最大試行回数に達した場合(通常ここには来ない)
-                console.error('❌ 画像圧縮が最大試行回数に達しました。最後の結果を使用します。');
+                // 最大試行回数に達した場合 - 最後の手段として超圧縮
+                console.warn('⚠️ 最大試行回数到達。超圧縮モードで再試行...');
+                
+                // 強制的に小さいサイズで再圧縮
+                const emergencySize = 200; // 200px固定
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > height) {
+                    height = (height * emergencySize) / width;
+                    width = emergencySize;
+                } else {
+                    width = (width * emergencySize) / height;
+                    height = emergencySize;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                compressedData = canvas.toDataURL('image/jpeg', 0.3); // 品質30%
+                
+                console.log(`🆘 緊急圧縮完了: ${Math.round(width)}x${Math.round(height)}px, 品質30%, 文字数${compressedData.length}`);
+                
                 resolve({
                     data: compressedData,
                     name: imageObj.name,
