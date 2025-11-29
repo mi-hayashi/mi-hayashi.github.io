@@ -604,16 +604,24 @@ async function submitReport() {
         
         // GitHub Issuesにも保存(オプション)
         if (CONFIG.github.enabled && CONFIG.github.token) {
-            const syncSuccess = await saveToGitHub(report);
-            if (syncSuccess) {
-                report.syncStatus = 'synced';
-                await updateReportSyncStatus(report.timestamp, 'synced');
-            } else {
+            try {
+                const syncSuccess = await saveToGitHub(report);
+                if (syncSuccess) {
+                    report.syncStatus = 'synced';
+                    await updateReportSyncStatus(report.timestamp, 'synced');
+                } else {
+                    report.syncStatus = 'failed';
+                    await updateReportSyncStatus(report.timestamp, 'failed');
+                }
+            } catch (syncError) {
+                // 同期エラーの詳細をログに送信
+                console.error('❌ GitHub同期エラー(通常送信):', syncError);
                 report.syncStatus = 'failed';
                 await updateReportSyncStatus(report.timestamp, 'failed');
-                // エラーログを送信(詳細情報付き)
-                await sendErrorLog('GitHub送信失敗', report, {
-                    reason: 'saveToGitHub returned false',
+                await sendErrorLog('GitHub送信失敗(通常送信)', report, {
+                    errorType: 'sync_error',
+                    errorMessage: syncError.message,
+                    errorStack: syncError.stack,
                     attemptTime: new Date().toISOString()
                 });
             }
