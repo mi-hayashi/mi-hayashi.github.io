@@ -610,32 +610,18 @@ async function submitReport() {
         
         // GitHub Issuesにも保存(オプション)
         if (CONFIG.github.enabled && CONFIG.github.token) {
-            try {
-                const syncSuccess = await saveToGitHub(report);
-                if (syncSuccess) {
-                    report.syncStatus = 'synced';
-                    await updateReportSyncStatus(report.timestamp, 'synced');
-                } else {
-                    report.syncStatus = 'failed';
-                    await updateReportSyncStatus(report.timestamp, 'failed');
-                }
-            } catch (syncError) {
-                // 同期エラーの詳細をログに送信
-                console.error('❌ GitHub同期エラー(通常送信):', syncError);
+            const syncSuccess = await saveToGitHub(report);
+            if (syncSuccess) {
+                report.syncStatus = 'synced';
+                await updateReportSyncStatus(report.timestamp, 'synced');
+            } else {
+                // saveToGitHub内で既にエラーログ送信済み
                 report.syncStatus = 'failed';
                 await updateReportSyncStatus(report.timestamp, 'failed');
-                await sendErrorLog('GitHub送信失敗(通常送信)', report, {
-                    errorType: 'sync_error',
-                    errorMessage: syncError.message,
-                    errorStack: syncError.stack,
-                    attemptTime: new Date().toISOString()
-                });
             }
         } else {
             report.syncStatus = 'local-only';
             await updateReportSyncStatus(report.timestamp, 'local-only');
-            // トークンなしの場合はエラーログ送信不可(トークンが必要なため)
-            console.warn('⚠️ トークンなしでローカル保存のみ実行されました');
         }
         
         // リセット
