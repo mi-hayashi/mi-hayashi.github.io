@@ -186,6 +186,9 @@ function initializeApp() {
         }
     }
     
+    // ページ読み込み時に一度同期を実行
+    autoSyncInBackground();
+    
     // 自動リフレッシュ開始(30秒ごと)
     startAutoRefresh();
 }
@@ -1199,8 +1202,12 @@ function getUnsyncedReports() {
         if (!localData) return [];
         
         const reports = JSON.parse(localData);
-        // syncStatusがない(古い報告)か、syncedでない報告を全て取得
-        return reports.filter(r => !r.syncStatus || r.syncStatus !== 'synced');
+        // syncStatusがない(古い報告)、pending、failedのみを取得
+        // syncing(送信中)とsynced(完了)は除外
+        return reports.filter(r => {
+            const status = r.syncStatus;
+            return !status || status === 'pending' || status === 'failed' || status === 'local-only';
+        });
     } catch (error) {
         console.error('❌ 未同期レポート取得エラー:', error);
         return [];
@@ -1227,6 +1234,9 @@ async function syncUnsyncedReports() {
     
     for (const report of unsyncedReports) {
         try {
+            // 送信前にsyncingステータスに変更(重複送信防止)
+            await updateReportSyncStatus(report.timestamp, 'syncing');
+            
             const success = await saveToGitHub(report);
             if (success) {
                 await updateReportSyncStatus(report.timestamp, 'synced');
@@ -1239,6 +1249,7 @@ async function syncUnsyncedReports() {
             await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
             console.error('❌ 同期エラー:', error);
+            await updateReportSyncStatus(report.timestamp, 'failed');
             failedCount++;
         }
     }
