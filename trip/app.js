@@ -1046,7 +1046,7 @@ function closeModal() {
 }
 
 // GitHub用に画像を圧縮(Issue本文は65536文字制限)
-async function compressImageForGitHub(imageObj) {
+async function compressImageForGitHub(imageObj, maxChars = 40000) {
     // 動画はスキップ
     if (imageObj.isVideo) {
         return imageObj;
@@ -1058,14 +1058,13 @@ async function compressImageForGitHub(imageObj) {
     }
     
     try {
-        // Base64のサイズを計算(65536文字制限、安全のため45000文字まで)
-        const maxChars = 45000;
-        
         if (imageObj.data.length <= maxChars) {
             // すでに小さい場合はそのまま
-            console.log(`✅ 画像サイズOK: ${imageObj.name} (${imageObj.data.length} 文字)`);
+            console.log(`✅ 画像サイズOK: ${imageObj.name} (${imageObj.data.length}文字 / 制限${maxChars}文字)`);
             return imageObj;
         }
+        
+        console.log(`⚠️ 画像が大きいため圧縮開始: ${imageObj.data.length}文字 → 目標${maxChars}文字以下`);
         
         // 画像を再圧縮
         return new Promise((resolve) => {
@@ -1105,11 +1104,13 @@ async function compressImageForGitHub(imageObj) {
                     // 圧縮実行
                     compressedData = canvas.toDataURL('image/jpeg', quality);
                     
-                    console.log(`🔄 GitHub圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
+                    if (attempts % 5 === 0 || compressedData.length <= maxChars) {
+                        console.log(`🔄 GitHub圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
+                    }
                     
                     // 制限内に収まったら終了
                     if (compressedData.length <= maxChars) {
-                        console.log(`✅ GitHub画像圧縮成功: ${imageObj.name} (${imageObj.data.length} → ${compressedData.length} 文字)`);
+                        console.log(`✅ GitHub画像圧縮成功: ${imageObj.name} (${imageObj.data.length} → ${compressedData.length}文字)`);
                         resolve({
                             data: compressedData,
                             name: imageObj.name,
@@ -1120,38 +1121,38 @@ async function compressImageForGitHub(imageObj) {
                     
                     // 次の試行のパラメータ調整(段階的に厳しく)
                     if (attempts < 10) {
-                        // フェーズ1: 品質を下げる (90% → 50%)
+                        // フェーズ1: 品質を下げる (90% → 45%)
                         quality -= 0.05;
                     } else if (attempts < 20) {
                         // フェーズ2: サイズを少し縮小 + 品質を下げる
-                        maxSize = maxSize * 0.9; // 10%ずつ縮小
+                        maxSize = maxSize * 0.88; // 12%ずつ縮小
                         quality -= 0.03;
-                        if (quality < 0.2) quality = 0.2; // 最低20%は維持
+                        if (quality < 0.15) quality = 0.15; // 最低15%
                     } else if (attempts < 35) {
-                        // フェーズ3: サイズを大きく縮小 + 品質低め
-                        maxSize = maxSize * 0.8; // 20%ずつ縮小
+                        // フェーズ3: サイズを大きく縮小
+                        maxSize = maxSize * 0.75; // 25%ずつ縮小
                         quality -= 0.02;
                         if (quality < 0.1) quality = 0.1; // 最低10%
                     } else {
-                        // フェーズ4: 最終段階 - 激しく縮小
-                        maxSize = maxSize * 0.7; // 30%ずつ縮小
-                        quality = 0.05; // 品質5%固定
+                        // フェーズ4: 激圧縮
+                        maxSize = maxSize * 0.65; // 35%ずつ縮小
+                        quality = Math.max(0.05, quality - 0.01); // 品質5%まで
                         
-                        // 最小サイズ制限(100px以下にはしない)
-                        if (maxSize < 100) {
-                            maxSize = 100;
-                            quality = Math.max(0.01, quality - 0.01); // 品質を1%まで下げる
+                        // 最小サイズ制限
+                        if (maxSize < 80) {
+                            maxSize = 80;
+                            quality = Math.max(0.01, quality - 0.01);
                         }
                     }
                     
                     attempts++;
                 }
                 
-                // 最大試行回数に達した場合 - 最後の手段として超圧縮
-                console.warn('⚠️ 最大試行回数到達。超圧縮モードで再試行...');
+                // 最大試行回数に達した場合 - 緊急超圧縮
+                console.warn('⚠️ 最大試行回数到達。緊急超圧縮モード...');
                 
-                // 強制的に小さいサイズで再圧縮
-                const emergencySize = 200; // 200px固定
+                // 強制的に極小サイズで再圧縮
+                const emergencySize = 150; // 150px固定
                 let width = img.width;
                 let height = img.height;
                 
@@ -1168,9 +1169,9 @@ async function compressImageForGitHub(imageObj) {
                 ctx.clearRect(0, 0, width, height);
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                compressedData = canvas.toDataURL('image/jpeg', 0.3); // 品質30%
+                compressedData = canvas.toDataURL('image/jpeg', 0.2); // 品質20%
                 
-                console.log(`🆘 緊急圧縮完了: ${Math.round(width)}x${Math.round(height)}px, 品質30%, 文字数${compressedData.length}`);
+                console.log(`🆘 緊急圧縮完了: ${Math.round(width)}x${Math.round(height)}px, 品質20%, 文字数${compressedData.length}`);
                 
                 resolve({
                     data: compressedData,
@@ -1204,9 +1205,35 @@ async function saveToGitHub(report) {
         ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\n')
         : 'なし';
     
-    // 画像をGitHub用に圧縮(Issue本文は65536文字制限)
+    // まずテキスト部分のサイズを計算
+    const title = `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`;
+    const textPart = `## ${report.teamName} - ミッション達成報告
+
+**日時:** ${new Date(report.timestamp).toLocaleString('ja-JP')}
+
+**達成したミッション:**
+${missionsText}
+
+**コメント:** ${report.comment || 'なし'}
+
+---
+
+## 📸 アップロード画像・動画
+
+`;
+    
+    const footer = `\n---\n*このレポートは社員旅行ミッション管理システムから自動投稿されました*`;
+    
+    // テキスト部分のサイズ
+    const textSize = textPart.length + footer.length;
+    const maxTotalSize = 65000; // 安全マージンを持って65000文字
+    const maxImageSize = maxTotalSize - textSize - 500; // さらに500文字の余裕
+    
+    console.log(`📊 Issue本文計算: テキスト部分=${textSize}文字, 画像用=${maxImageSize}文字`);
+    
+    // 画像をGitHub用に圧縮(計算した制限で)
     const compressedImages = await Promise.all(
-        report.images.map(img => compressImageForGitHub(img))
+        report.images.map(img => compressImageForGitHub(img, maxImageSize))
     );
     
     // 画像を本文に埋め込む(Base64形式)
@@ -1220,24 +1247,14 @@ async function saveToGitHub(report) {
         }
     }).join('\n');
     
-    const title = `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`;
-    const body = `## ${report.teamName} - ミッション達成報告
-
-**日時:** ${new Date(report.timestamp).toLocaleString('ja-JP')}
-
-**達成したミッション:**
-${missionsText}
-
-**コメント:** ${report.comment || 'なし'}
-
----
-
-## 📸 アップロード画像・動画
-
-${imagesText}
-
----
-*このレポートは社員旅行ミッション管理システムから自動投稿されました*`;
+    const body = textPart + imagesText + footer;
+    
+    // 最終チェック
+    console.log(`📏 最終Issue本文サイズ: ${body.length}文字 (制限: 65536文字)`);
+    
+    if (body.length > 65536) {
+        console.error(`❌ Issue本文が制限超過: ${body.length}文字 > 65536文字`);
+    }
 
     const labels = [`mission-report`, `team-${report.teamId}`];
     
