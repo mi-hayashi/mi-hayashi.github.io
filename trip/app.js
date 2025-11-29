@@ -646,7 +646,7 @@ async function submitReport() {
     }
 }
 
-// ファイルをBase64に変換
+// ファイルをBase64に変換(LocalStorage用 - 適応的圧縮)
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -672,36 +672,80 @@ function fileToBase64(file) {
             return;
         }
         
-        // 画像の場合は圧縮
+        // 画像の場合は適応的圧縮
         reader.onload = () => {
             const img = new Image();
-            img.onload = () => {
+            img.onload = async () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // 最大サイズを設定
-                const maxSize = 800;
-                let width = img.width;
-                let height = img.height;
+                // LocalStorage用の目標サイズ(約200KB = 280000文字)
+                const maxChars = 280000;
                 
-                if (width > height && width > maxSize) {
-                    height = (height * maxSize) / width;
-                    width = maxSize;
-                } else if (height > maxSize) {
-                    width = (width * maxSize) / height;
-                    height = maxSize;
+                // 初期サイズと品質
+                let maxSize = Math.max(img.width, img.height);
+                let quality = 0.85; // 初期品質85%
+                let compressedData = '';
+                let attempts = 0;
+                const maxAttempts = 20;
+                
+                // 圧縮を繰り返して目標サイズ以内に収める
+                while (attempts < maxAttempts) {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // リサイズ
+                    if (width > height && width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    } else if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // 圧縮実行
+                    compressedData = canvas.toDataURL('image/jpeg', quality);
+                    
+                    console.log(`🔄 LocalStorage圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
+                    
+                    // 制限内に収まったら終了
+                    if (compressedData.length <= maxChars) {
+                        console.log(`✅ LocalStorage画像圧縮成功: ${file.name} (文字数${compressedData.length})`);
+                        resolve({
+                            data: compressedData,
+                            name: file.name,
+                            isVideo: false
+                        });
+                        return;
+                    }
+                    
+                    // 次の試行のパラメータ調整
+                    if (quality > 0.4) {
+                        // まずは品質を下げる(40%まで)
+                        quality -= 0.1;
+                    } else {
+                        // 品質が十分低くなったらサイズを縮小
+                        maxSize = maxSize * 0.85; // 15%ずつ縮小
+                        quality = 0.75; // 品質を少し戻す
+                    }
+                    
+                    attempts++;
                 }
                 
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                
+                // 最大試行回数に達した場合(通常ここには来ない)
+                console.log(`✅ LocalStorage画像圧縮完了(最大試行): ${file.name} (文字数${compressedData.length})`);
                 resolve({
-                    data: canvas.toDataURL('image/jpeg', 0.7),
+                    data: compressedData,
                     name: file.name,
                     isVideo: false
                 });
             };
+            img.onerror = reject;
             img.src = reader.result;
         };
         reader.onerror = reject;
