@@ -1247,9 +1247,9 @@ ${missionsText}
     
     const labels = [`mission-report`, `team-${report.teamId}`];
     
-    // 画像を段階的に圧縮して送信を試みる
+    // 画像を段階的に圧縮して送信を試みる(65536文字以下になるまで繰り返す)
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 50; // 安全装置として最大50回
     
     while (attempts < maxAttempts) {
         // 画像をGitHub用に圧縮(計算した制限で)
@@ -1270,12 +1270,24 @@ ${missionsText}
         
         const body = textPart + imagesText + footer;
         
-        console.log(`📏 試行${attempts + 1}: Issue本文サイズ=${body.length}文字 (制限: 65536文字)`);
+        console.log(`📏 試行${attempts + 1}: Issue本文サイズ=${body.length}文字 (制限: 65536文字, 画像用制限: ${maxImageSize}文字)`);
         
         // 制限を超えている場合は画像サイズをさらに削減
         if (body.length > 65536) {
-            console.log(`⚠️ サイズ超過。画像サイズを削減します...`);
-            maxImageSize = Math.floor(maxImageSize * 0.8); // 20%削減
+            console.log(`⚠️ サイズ超過(${body.length} > 65536)。画像サイズを削減します...`);
+            // より積極的に削減
+            maxImageSize = Math.floor(maxImageSize * 0.7); // 30%削減
+            if (maxImageSize < 5000) {
+                maxImageSize = 5000; // 最低5000文字は確保
+            }
+            attempts++;
+            continue;
+        }
+        
+        // 安全マージンを確保(63000文字以下に抑える)
+        if (body.length > 63000) {
+            console.log(`⚠️ 安全マージン不足(${body.length} > 63000)。さらに削減します...`);
+            maxImageSize = Math.floor(maxImageSize * 0.85); // 15%削減
             attempts++;
             continue;
         }
@@ -1316,8 +1328,12 @@ ${missionsText}
 
                 // 422エラー(サイズ超過)の場合は再試行
                 if (response.status === 422 && attempts < maxAttempts - 1) {
-                    console.log(`⚠️ 422エラー。画像サイズを削減して再試行...`);
-                    maxImageSize = Math.floor(maxImageSize * 0.7); // 30%削減
+                    console.log(`⚠️ 422エラー(送信後判明)。画像サイズをさらに削減して再試行...`);
+                    // より積極的に削減
+                    maxImageSize = Math.floor(maxImageSize * 0.6); // 40%削減
+                    if (maxImageSize < 3000) {
+                        maxImageSize = 3000;
+                    }
                     attempts++;
                     continue;
                 }
@@ -1329,6 +1345,7 @@ ${missionsText}
                     errorData: errorData,
                     bodyLength: body.length,
                     attempts: attempts + 1,
+                    maxImageSize: maxImageSize,
                     headers: {
                         'x-ratelimit-limit': response.headers.get('x-ratelimit-limit'),
                         'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining'),
@@ -1360,7 +1377,9 @@ ${missionsText}
             await sendErrorLog('GitHub送信エラー(例外)', report, {
                 errorMessage: error.message,
                 errorStack: error.stack,
-                attempts: attempts + 1
+                attempts: attempts + 1,
+                bodyLength: body.length,
+                maxImageSize: maxImageSize
             });
             
             return false; // 失敗を返す
