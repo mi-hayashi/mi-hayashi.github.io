@@ -237,8 +237,14 @@ async function manualRefresh() {
     showRefreshStatus('更新中...', 'loading');
     await refreshData(true); // 通知ありで更新
     
-    // 未同期レポートも同時に同期
-    await autoSyncInBackground();
+    // 未同期レポートも同時に同期(手動実行時はデバッグ情報を必ず送信)
+    const result = await syncUnsyncedReports();
+    
+    // 同期結果を通知
+    if (result.success > 0 || result.failed > 0) {
+        const message = `同期完了: 成功${result.success}件, 失敗${result.failed}件`;
+        showRefreshStatus(message, result.failed > 0 ? 'error' : 'success');
+    }
 }
 
 // バックグラウンドで自動同期(表面上わからないように)
@@ -1500,69 +1506,206 @@ async function updateReportSyncStatus(timestamp, status) {
 // 未同期レポートを取得
 function getUnsyncedReports() {
     try {
+        console.log('🔍 [DEBUG] getUnsyncedReports開始');
         const localData = localStorage.getItem('missionReports');
-        if (!localData) return [];
+        
+        if (!localData) {
+            console.log('🔍 [DEBUG] LocalStorageにmissionReportsなし');
+            return [];
+        }
+        
+        console.log('🔍 [DEBUG] LocalStorageデータサイズ:', localData.length, '文字');
         
         const reports = JSON.parse(localData);
+        console.log('🔍 [DEBUG] 全レポート数:', reports.length);
+        
         // syncStatusがない(古い報告)、pending、failedのみを取得
         // syncing(送信中)とsynced(完了)は除外
-        return reports.filter(r => {
+        const unsyncedReports = reports.filter(r => {
             const status = r.syncStatus;
             return !status || status === 'pending' || status === 'failed' || status === 'local-only';
         });
+        
+        console.log('🔍 [DEBUG] 未同期レポート数:', unsyncedReports.length);
+        console.log('🔍 [DEBUG] ステータス内訳:', reports.reduce((acc, r) => {
+            const status = r.syncStatus || 'undefined';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {}));
+        
+        return unsyncedReports;
     } catch (error) {
-        console.error('❌ 未同期レポート取得エラー:', error);
+        console.error('❌ [DEBUG] 未同期レポート取得エラー:', error);
+        console.error('❌ [DEBUG] エラー詳細:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         return [];
     }
 }
 
 // 未同期レポートを自動同期
 async function syncUnsyncedReports() {
-    if (!CONFIG.github.enabled || !CONFIG.github.token) {
-        console.log('⚠️ GitHub連携が無効、または トークンがありません');
-        return {success: 0, failed: 0};
-    }
+    const debugLog = []; // デバッグ情報を記録
+    const startTime = new Date().toISOString();
     
-    const unsyncedReports = getUnsyncedReports();
-    if (unsyncedReports.length === 0) {
-        console.log('✅ 未同期レポートはありません');
-        return {success: 0, failed: 0};
-    }
-    
-    console.log(`🔄 ${unsyncedReports.length}件の未同期レポートを送信中...`);
-    
-    let successCount = 0;
-    let failedCount = 0;
-    
-    for (const report of unsyncedReports) {
-        try {
-            // 送信前にsyncingステータスに変更(重複送信防止)
-            await updateReportSyncStatus(report.timestamp, 'syncing');
+    try {
+        debugLog.push('🔍 syncUnsyncedReports開始');
+        debugLog.push(`CONFIG.github.enabled: ${CONFIG.github.enabled}`);
+        debugLog.push(`CONFIG.github.token存在: ${!!CONFIG.github.token}`);
+        
+        if (!CONFIG.github.enabled || !CONFIG.github.token) {
+            debugLog.push('⚠️ GitHub連携が無効、または トークンがありません');
+            // デバッグIssue送信
+            await sendDebugIssue('同期スキップ(トークンなし)', debugLog, startTime);
+            return {success: 0, failed: 0};
+        }
+        
+        debugLog.push('未同期レポート取得中...');
+        const unsyncedReports = getUnsyncedReports();
+        debugLog.push(`未同期レポート数: ${unsyncedReports.length}`);
+        
+        if (unsyncedReports.length === 0) {
+            debugLog.push('✅ 未同期レポートはありません');
+            return {success: 0, failed: 0};
+        }
+        
+        debugLog.push(`${unsyncedReports.length}件の未同期レポートを送信中...`);
+        
+        let successCount = 0;
+        let failedCount = 0;
+        const reportResults = [];
+        
+        for (let i = 0; i < unsyncedReports.length; i++) {
+            const report = unsyncedReports[i];
+            const reportLog = [];
+            reportLog.push(`レポート${i + 1}/${unsyncedReports.length}の処理開始: ${report.timestamp}`);
             
-            const success = await saveToGitHub(report);
-            if (success) {
-                await updateReportSyncStatus(report.timestamp, 'synced');
-                successCount++;
-            } else {
+            try {
+                // 送信前にsyncingステータスに変更(重複送信防止)
+                reportLog.push('ステータスをsyncingに変更中...');
+                await updateReportSyncStatus(report.timestamp, 'syncing');
+                
+                reportLog.push('saveToGitHub呼び出し中...');
+                const success = await saveToGitHub(report);
+                reportLog.push(`saveToGitHub結果: ${success}`);
+                
+                if (success) {
+                    await updateReportSyncStatus(report.timestamp, 'synced');
+                    successCount++;
+                    reportLog.push(`✅ レポート${i + 1}送信成功`);
+                } else {
+                    await updateReportSyncStatus(report.timestamp, 'failed');
+                    failedCount++;
+                    reportLog.push(`❌ レポート${i + 1}送信失敗`);
+                }
+                
+                reportResults.push({index: i + 1, success, log: reportLog});
+                
+                // API制限対策で少し待機
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (error) {
+                reportLog.push(`❌ 同期エラー(レポート処理中): ${error.message}`);
+                reportLog.push(`エラー詳細: ${error.stack}`);
                 await updateReportSyncStatus(report.timestamp, 'failed');
                 failedCount++;
+                reportResults.push({index: i + 1, success: false, log: reportLog, error: error.message});
             }
-            // API制限対策で少し待機
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (error) {
-            console.error('❌ 同期エラー:', error);
-            await updateReportSyncStatus(report.timestamp, 'failed');
-            failedCount++;
         }
+        
+        debugLog.push(`同期完了 - 成功: ${successCount}, 失敗: ${failedCount}`);
+        debugLog.push('\n--- 各レポートの詳細 ---');
+        reportResults.forEach(r => {
+            debugLog.push(`\nレポート${r.index}: ${r.success ? '成功' : '失敗'}`);
+            debugLog.push(...r.log);
+        });
+        
+        // 失敗があればデバッグIssueを送信
+        if (failedCount > 0) {
+            await sendDebugIssue('同期失敗あり', debugLog, startTime, {successCount, failedCount, reportResults});
+        }
+        
+        return {success: successCount, failed: failedCount};
+    } catch (error) {
+        debugLog.push(`❌ syncUnsyncedReports全体エラー: ${error.message}`);
+        debugLog.push(`エラー詳細: ${error.stack}`);
+        
+        // 重大なエラーの場合は必ずデバッグIssueを送信
+        await sendDebugIssue('同期処理全体エラー', debugLog, startTime, {error: error.message, stack: error.stack});
+        
+        return {success: 0, failed: 0};
+    }
+}
+
+// デバッグ情報をGitHub Issueに送信(スマホで確認可能)
+async function sendDebugIssue(debugType, debugLog, startTime, additionalData = null) {
+    if (!CONFIG.github.enabled || !CONFIG.github.token) {
+        return; // トークンがない場合は送信不可
     }
     
-    console.log(`✅ 同期完了 - 成功: ${successCount}, 失敗: ${failedCount}`);
-    return {success: successCount, failed: failedCount};
+    try {
+        const endTime = new Date().toISOString();
+        const duration = new Date(endTime) - new Date(startTime);
+        
+        const title = `[デバッグ] ${debugType} - ${new Date().toLocaleString('ja-JP')}`;
+        
+        let additionalSection = '';
+        if (additionalData) {
+            additionalSection = `\n\n### 追加データ\n\n\`\`\`json\n${JSON.stringify(additionalData, null, 2)}\n\`\`\`\n`;
+        }
+        
+        const body = `## 同期処理デバッグ情報
+
+**デバッグ種別:** ${debugType}
+**開始時刻:** ${startTime}
+**終了時刻:** ${endTime}
+**処理時間:** ${duration}ms
+**ブラウザ:** ${navigator.userAgent}
+
+### 処理ログ
+
+\`\`\`
+${debugLog.join('\n')}
+\`\`\`${additionalSection}
+
+---
+*このデバッグ情報は自動送信されています*`;
+        
+        const labels = ['debug-log', 'auto-generated'];
+        
+        const response = await fetch(
+            `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
+            {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `token ${CONFIG.github.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    body: body,
+                    labels: labels
+                })
+            }
+        );
+        
+        if (response.ok) {
+            console.log('📝 デバッグ情報をGitHubに送信しました');
+        }
+    } catch (error) {
+        // デバッグIssueの送信失敗は無視(無限ループ防止)
+        console.error('❌ デバッグIssue送信失敗:', error);
+    }
 }
 
 // エラーログをGitHubに送信(匿名化)
 async function sendErrorLog(errorType, report, additionalInfo = null) {
+    console.log('🔍 [DEBUG] sendErrorLog呼び出し:', errorType);
+    
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
+        console.log('⚠️ [DEBUG] エラーログ送信スキップ: GitHub連携無効またはトークンなし');
         return;
     }
     
@@ -1622,9 +1765,20 @@ async function sendErrorLog(errorType, report, additionalInfo = null) {
         
         if (response.ok) {
             console.log('📝 エラーログをGitHubに送信しました');
+            const result = await response.json();
+            console.log('🔍 [DEBUG] エラーログIssue URL:', result.html_url);
+        } else {
+            console.error('❌ [DEBUG] エラーログ送信失敗 - ステータス:', response.status);
+            const errorText = await response.text();
+            console.error('❌ [DEBUG] エラーログ送信失敗 - レスポンス:', errorText);
         }
     } catch (error) {
-        console.error('❌ エラーログ送信失敗:', error);
+        console.error('❌ [DEBUG] エラーログ送信例外:', error);
+        console.error('❌ [DEBUG] 例外詳細:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         // エラーログの送信失敗は無視(無限ループ防止)
     }
 }
