@@ -166,8 +166,27 @@ async function validateGitHubToken(token) {
 // トークンステータス表示
 function showTokenStatus(message, type) {
     const status = document.getElementById('tokenStatus');
+    if (!status) return;
     status.textContent = message;
-    status.className = type;
+    status.style.display = 'block';
+    const palette = {
+        error: {bg: '#f8d7da', color: '#721c24', border: '#f5c6cb'},
+        success: {bg: '#e6fffb', color: '#135200', border: '#87e8de'},
+        info: {bg: '#fffbe6', color: '#ad6800', border: '#ffe58f'}
+    };
+    const tone = palette[type] || palette.info;
+    status.style.background = tone.bg;
+    status.style.color = tone.color;
+    status.style.border = `1px solid ${tone.border}`;
+}
+
+// トークンの再入力を促す(期限切れ/権限不足時)
+function handleGitHubAuthFailure(userMessage = '') {
+    localStorage.removeItem('github_token');
+    CONFIG.github.token = '';
+    const message = userMessage || '⚠️ GitHubトークンの認証に失敗しました。再設定してください。';
+    showTokenStatus(message, 'error');
+    showTokenModal();
 }
 
 function initializeApp() {
@@ -568,22 +587,35 @@ async function submitReport() {
         
         // LocalStorageに保存
         await saveReport(report);
+        console.log('✅ ローカルストレージに保存完了');
         
         // GitHub Issuesにも保存(オプション)
         if (CONFIG.github.enabled && CONFIG.github.token) {
-            const syncSuccess = await saveToGitHub(report);
-            if (syncSuccess) {
-                report.syncStatus = 'synced';
-                await updateReportSyncStatus(report.timestamp, 'synced');
-            } else {
+            console.log('🔄 GitHub同期を開始...');
+            try {
+                const syncSuccess = await saveToGitHub(report);
+                console.log('📊 GitHub同期結果:', syncSuccess ? '成功' : '失敗');
+                
+                if (syncSuccess) {
+                    report.syncStatus = 'synced';
+                    await updateReportSyncStatus(report.timestamp, 'synced');
+                    console.log('✅ 同期ステータスを「synced」に更新');
+                } else {
+                    report.syncStatus = 'failed';
+                    await updateReportSyncStatus(report.timestamp, 'failed');
+                    console.log('⚠️ 同期ステータスを「failed」に更新');
+                    // エラーログを送信
+                    await sendErrorLog('GitHub送信失敗', report);
+                }
+            } catch (syncError) {
+                console.error('❌ GitHub同期処理で例外発生:', syncError);
                 report.syncStatus = 'failed';
                 await updateReportSyncStatus(report.timestamp, 'failed');
-                // エラーログを送信
-                await sendErrorLog('GitHub送信失敗', report);
             }
         } else {
             report.syncStatus = 'local-only';
             await updateReportSyncStatus(report.timestamp, 'local-only');
+            console.log('ℹ️ GitHub連携無効 - ローカル保存のみ');
             // トークンなしの場合はエラーログ送信不可(トークンが必要なため)
             console.warn('⚠️ トークンなしでローカル保存のみ実行されました');
         }
@@ -965,7 +997,7 @@ function closeModal() {
     modalVideo.src = '';
 }
 
-// GitHub Actionsを使ってIssueを作成
+// GitHubに直接Issueを作成
 async function saveToGitHub(report) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
         console.log('GitHub連携が無効です');
@@ -974,17 +1006,17 @@ async function saveToGitHub(report) {
     
     // ミッション情報を整形
     const missionsText = report.missions 
-        ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\\n')
+        ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\n')
         : 'なし';
     
     // 画像を本文に埋め込む(Base64形式)
     const imagesText = report.images.map((img, index) => {
         if (img.isVideo) {
-            return `### 動画 ${index + 1}: ${img.name}\\n\\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\\n`;
+            return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
         } else {
-            return `### 画像 ${index + 1}: ${img.name}\\n\\n![${img.name}](${img.data})\\n`;
+            return `### 画像 ${index + 1}: ${img.name}\n\n![${img.name}](${img.data})\n`;
         }
-    }).join('\\n');
+    }).join('\n');
     
     const title = `【${report.teamName}】${new Date(report.timestamp).toLocaleDateString('ja-JP')} ミッション報告`;
     const body = `## ${report.teamName} - ミッション達成報告
@@ -1005,12 +1037,12 @@ ${imagesText}
 ---
 *このレポートは社員旅行ミッション管理システムから自動投稿されました*`;
 
-    const labels = `mission-report,team-${report.teamId}`;
+    const labels = [`mission-report`, `team-${report.teamId}`];
     
     try {
-        // GitHub Actions workflow_dispatch を呼び出す
+        // GitHub API で直接Issueを作成
         const response = await fetch(
-            `https://api.github.com/repos/${CONFIG.github.repo}/actions/workflows/create_issue.yml/dispatches`,
+            `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
             {
                 method: 'POST',
                 headers: {
@@ -1019,27 +1051,47 @@ ${imagesText}
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    ref: 'main',
-                    inputs: {
-                        title: title,
-                        body: body,
-                        labels: labels
-                    }
+                    title: title,
+                    body: body,
+                    labels: labels
                 })
             }
         );
         
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error('GitHub Actions エラー詳細:', errorData);
-            throw new Error(`GitHub Actions error: ${response.status}`);
+            let errorData = null;
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                console.error('GitHub API エラー詳細の解析に失敗:', parseError);
+            }
+            console.error('GitHub API エラー詳細:', errorData);
+
+            if (response.status === 401) {
+                handleGitHubAuthFailure('⚠️ GitHubトークンが無効か期限切れです。再設定してください。');
+            } else if (response.status === 403) {
+                handleGitHubAuthFailure('⚠️ GitHubトークンにIssues作成権限がありません。repo権限を付与してください。');
+            } else if (response.status === 404) {
+                showRefreshStatus('⚠️ 指定されたリポジトリが見つかりません。config.jsのgithub.repoを確認してください。', 'error');
+            } else if (response.status === 410) {
+                showRefreshStatus('⚠️ リポジトリでIssuesが無効です。Settings > General > FeaturesでIssuesを有効化してください。', 'error');
+            } else if (response.status === 422) {
+                showRefreshStatus('⚠️ Issue本文がGitHubの制限を超えました。画像枚数やサイズを減らしてください。', 'error');
+            } else {
+                showRefreshStatus(`⚠️ GitHub APIエラー(${response.status})が発生しました。ネットワークと設定を確認してください。`, 'error');
+            }
+
+            throw new Error(`GitHub API error: ${response.status}`);
         }
         
-        console.log('✅ GitHub Actionsトリガー成功 - 数秒後にIssueが作成されます');
+        const issue = await response.json();
+        console.log('✅ GitHub Issueを作成しました:', issue.html_url);
+        console.log('✅ GitHub同期成功 - Issue #' + issue.number);
         return true; // 成功
         
     } catch (error) {
         console.error('❌ GitHub保存エラー:', error);
+        console.error('❌ エラー詳細:', error.message, error.stack);
         console.warn('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
         return false; // 失敗
     }
@@ -1292,11 +1344,11 @@ async function sendErrorLog(errorType, report) {
 ---
 *このログは自動送信されています*`;
         
-        const labels = 'error-log,auto-generated';
+        const labels = ['error-log', 'auto-generated'];
         
-        // GitHub Actions経由で送信
+        // GitHub API で直接Issueを作成
         const response = await fetch(
-            `https://api.github.com/repos/${CONFIG.github.repo}/actions/workflows/create_issue.yml/dispatches`,
+            `https://api.github.com/repos/${CONFIG.github.repo}/issues`,
             {
                 method: 'POST',
                 headers: {
@@ -1305,12 +1357,9 @@ async function sendErrorLog(errorType, report) {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    ref: 'main',
-                    inputs: {
-                        title: title,
-                        body: body,
-                        labels: labels
-                    }
+                    title: title,
+                    body: body,
+                    labels: labels
                 })
             }
         );
