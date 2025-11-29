@@ -587,40 +587,25 @@ async function submitReport() {
         
         // LocalStorageに保存
         await saveReport(report);
-        console.log('✅ ローカルストレージに保存完了');
         
         // GitHub Issuesにも保存(オプション)
         if (CONFIG.github.enabled && CONFIG.github.token) {
-            console.log('🔄 GitHub同期を開始...');
-            try {
-                const syncSuccess = await saveToGitHub(report);
-                console.log('📊 GitHub同期結果:', syncSuccess ? '成功' : '失敗');
-                
-                if (syncSuccess) {
-                    report.syncStatus = 'synced';
-                    await updateReportSyncStatus(report.timestamp, 'synced');
-                    console.log('✅ 同期ステータスを「synced」に更新');
-                } else {
-                    report.syncStatus = 'failed';
-                    await updateReportSyncStatus(report.timestamp, 'failed');
-                    console.log('⚠️ 同期ステータスを「failed」に更新');
-                    // エラーログは既にsaveToGitHub内で送信済み
-                }
-            } catch (syncError) {
-                console.error('❌ GitHub同期処理で例外発生:', syncError);
+            const syncSuccess = await saveToGitHub(report);
+            if (syncSuccess) {
+                report.syncStatus = 'synced';
+                await updateReportSyncStatus(report.timestamp, 'synced');
+            } else {
                 report.syncStatus = 'failed';
                 await updateReportSyncStatus(report.timestamp, 'failed');
-                
-                // 例外の詳細をエラーログに送信
-                await sendDetailedErrorLog('GitHub送信処理で例外発生', report, {
-                    errorMessage: syncError.message,
-                    stackTrace: syncError.stack
+                // エラーログを送信(詳細情報付き)
+                await sendErrorLog('GitHub送信失敗', report, {
+                    reason: 'saveToGitHub returned false',
+                    attemptTime: new Date().toISOString()
                 });
             }
         } else {
             report.syncStatus = 'local-only';
             await updateReportSyncStatus(report.timestamp, 'local-only');
-            console.log('ℹ️ GitHub連携無効 - ローカル保存のみ');
             // トークンなしの場合はエラーログ送信不可(トークンが必要なため)
             console.warn('⚠️ トークンなしでローカル保存のみ実行されました');
         }
@@ -1065,53 +1050,63 @@ ${imagesText}
         
         if (!response.ok) {
             let errorData = null;
-            let errorMessage = '';
-            
+            let errorText = '';
             try {
-                errorData = await response.json();
+                errorText = await response.text();
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch (jsonError) {
+                    errorData = { rawResponse: errorText };
+                }
             } catch (parseError) {
                 console.error('GitHub API エラー詳細の解析に失敗:', parseError);
             }
             console.error('GitHub API エラー詳細:', errorData);
 
-            // エラーメッセージを構築(エラーログ用)
-            if (response.status === 401) {
-                errorMessage = 'GitHubトークンが無効か期限切れです';
-                handleGitHubAuthFailure('⚠️ GitHubトークンが無効か期限切れです。再設定してください。');
-            } else if (response.status === 403) {
-                errorMessage = 'GitHubトークンにIssues作成権限がありません';
-                handleGitHubAuthFailure('⚠️ GitHubトークンにIssues作成権限がありません。repo権限を付与してください。');
-            } else if (response.status === 404) {
-                errorMessage = '指定されたリポジトリが見つかりません';
-            } else if (response.status === 410) {
-                errorMessage = 'リポジトリでIssuesが無効です';
-            } else if (response.status === 422) {
-                errorMessage = 'Issue本文がGitHubの制限を超えました(画像が大きすぎる可能性)';
-            } else {
-                errorMessage = `GitHub APIエラー(${response.status})が発生しました`;
-            }
-
-            // エラー情報をIssueに送信
-            await sendDetailedErrorLog('GitHub送信失敗', report, {
+            // エラーログに詳細を送信(ユーザーには表示しない)
+            await sendErrorLog('GitHub Issue作成失敗', report, {
                 status: response.status,
                 statusText: response.statusText,
-                errorMessage: errorMessage,
-                errorData: errorData
+                errorData: errorData,
+                headers: {
+                    'x-ratelimit-limit': response.headers.get('x-ratelimit-limit'),
+                    'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining'),
+                    'x-ratelimit-reset': response.headers.get('x-ratelimit-reset')
+                }
             });
 
-            throw new Error(`GitHub API error: ${response.status}`);
+            if (response.status === 401) {
+                handleGitHubAuthFailure('⚠️ GitHubトークンが無効か期限切れです。再設定してください。');
+            } else if (response.status === 403) {
+                handleGitHubAuthFailure('⚠️ GitHubトークンにIssues作成権限がありません。repo権限を付与してください。');
+            } else if (response.status === 404) {
+                showRefreshStatus('⚠️ 指定されたリポジトリが見つかりません。config.jsのgithub.repoを確認してください。', 'error');
+            } else if (response.status === 410) {
+                showRefreshStatus('⚠️ リポジトリでIssuesが無効です。Settings > General > FeaturesでIssuesを有効化してください。', 'error');
+            } else if (response.status === 422) {
+                showRefreshStatus('⚠️ Issue本文がGitHubの制限を超えました。画像枚数やサイズを減らしてください。', 'error');
+            } else {
+                showRefreshStatus(`⚠️ GitHub APIエラー(${response.status})が発生しました。ネットワークと設定を確認してください。`, 'error');
+            }
+
+            return false; // 失敗を返す
         }
         
         const issue = await response.json();
         console.log('✅ GitHub Issueを作成しました:', issue.html_url);
-        console.log('✅ GitHub同期成功 - Issue #' + issue.number);
-        return true; // 成功
+        return true; // 成功を返す
         
     } catch (error) {
         console.error('❌ GitHub保存エラー:', error);
-        console.error('❌ エラー詳細:', error.message, error.stack);
         console.warn('⚠️ GitHub Issuesへの保存に失敗しましたが、ローカルには保存されています。');
-        return false; // 失敗
+        
+        // エラーログに詳細を送信(ユーザーには表示しない)
+        await sendErrorLog('GitHub送信エラー(例外)', report, {
+            errorMessage: error.message,
+            errorStack: error.stack
+        });
+        
+        return false; // 失敗を返す
     }
 }
 
@@ -1329,12 +1324,7 @@ async function syncUnsyncedReports() {
 }
 
 // エラーログをGitHubに送信(匿名化)
-async function sendErrorLog(errorType, report) {
-    await sendDetailedErrorLog(errorType, report, null);
-}
-
-// 詳細なエラーログをGitHubに送信
-async function sendDetailedErrorLog(errorType, report, errorDetails = null) {
+async function sendErrorLog(errorType, report, additionalInfo = null) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
         return;
     }
@@ -1352,10 +1342,14 @@ async function sendDetailedErrorLog(errorType, report, errorDetails = null) {
             missionCount: report.missions?.length || 0
         };
         
-        const title = `[エラーログ] ${errorType} - ${new Date().toLocaleDateString('ja-JP')}`;
+        // 追加情報をフォーマット
+        let additionalDetails = '';
+        if (additionalInfo) {
+            additionalDetails = `\n\n### 詳細情報\n\n\`\`\`json\n${JSON.stringify(additionalInfo, null, 2)}\n\`\`\`\n`;
+        }
         
-        // 基本情報
-        let body = `## 同期エラーログ (自動送信)
+        const title = `[エラーログ] ${errorType} - ${new Date().toLocaleDateString('ja-JP')}`;
+        const body = `## 同期エラーログ (自動送信)
 
 **エラー種別:** ${errorType}
 **発生日時:** ${errorInfo.timestamp}
@@ -1364,31 +1358,10 @@ async function sendDetailedErrorLog(errorType, report, errorDetails = null) {
 **トークン有無:** ${errorInfo.hasToken ? '有' : '無'}
 **レポート日時:** ${errorInfo.reportTimestamp}
 **画像数:** ${errorInfo.imageCount}
-**ミッション数:** ${errorInfo.missionCount}
-`;
-        
-        // 詳細なエラー情報を追加
-        if (errorDetails) {
-            body += `\n---\n\n## 📋 詳細なエラー情報\n\n`;
-            
-            if (errorDetails.status) {
-                body += `**HTTPステータス:** ${errorDetails.status} ${errorDetails.statusText || ''}\n`;
-            }
-            
-            if (errorDetails.errorMessage) {
-                body += `**エラーメッセージ:** ${errorDetails.errorMessage}\n`;
-            }
-            
-            if (errorDetails.errorData) {
-                body += `\n**API レスポンス:**\n\`\`\`json\n${JSON.stringify(errorDetails.errorData, null, 2)}\n\`\`\`\n`;
-            }
-            
-            if (errorDetails.stackTrace) {
-                body += `\n**スタックトレース:**\n\`\`\`\n${errorDetails.stackTrace}\n\`\`\`\n`;
-            }
-        }
-        
-        body += `\n---\n*このログは自動送信されています*`;
+**ミッション数:** ${errorInfo.missionCount}${additionalDetails}
+
+---
+*このログは自動送信されています*`;
         
         const labels = ['error-log', 'auto-generated'];
         
