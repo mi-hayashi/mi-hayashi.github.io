@@ -489,10 +489,24 @@ function setupFileInput() {
 function handleFileSelect(event) {
     const files = Array.from(event.target.files);
     
+    // 1枚のみ選択可能
+    if (files.length > 1) {
+        alert('写真は1枚のみ選択してください');
+        event.target.value = ''; // 選択をクリア
+        return;
+    }
+    
+    // 既に選択されている場合は上書き
+    selectedFiles = [];
+    document.getElementById('previewArea').innerHTML = '';
+    
     files.forEach(file => {
         if (file.type.startsWith('image/')) {
             selectedFiles.push(file);
             addPreview(file);
+        } else {
+            alert('画像ファイルを選択してください');
+            event.target.value = '';
         }
     });
     
@@ -987,6 +1001,112 @@ function closeModal() {
     modalVideo.src = '';
 }
 
+// GitHub用に画像を圧縮(Issue本文は65536文字制限)
+async function compressImageForGitHub(imageObj) {
+    // 動画はスキップ
+    if (imageObj.isVideo) {
+        return imageObj;
+    }
+    
+    // 空の画像もスキップ
+    if (!imageObj.data) {
+        return imageObj;
+    }
+    
+    try {
+        // Base64のサイズを計算(65536文字制限、1枚のみなので50000文字まで許容)
+        const maxChars = 50000;
+        
+        if (imageObj.data.length <= maxChars) {
+            // すでに小さい場合はそのまま
+            console.log(`✅ 画像サイズOK: ${imageObj.name} (${imageObj.data.length} 文字)`);
+            return imageObj;
+        }
+        
+        // 画像を再圧縮
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 初期サイズとして元の画像サイズから開始
+                let maxSize = Math.max(img.width, img.height);
+                let quality = 0.8; // 初期品質80%
+                let compressedData = '';
+                let attempts = 0;
+                const maxAttempts = 20; // 最大20回試行
+                
+                // 圧縮を繰り返して必ず制限内に収める
+                while (attempts < maxAttempts) {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // リサイズ
+                    if (width > height && width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    } else if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // 圧縮実行
+                    compressedData = canvas.toDataURL('image/jpeg', quality);
+                    
+                    console.log(`🔄 圧縮試行 ${attempts + 1}: サイズ${Math.round(maxSize)}px, 品質${Math.round(quality * 100)}%, 文字数${compressedData.length}`);
+                    
+                    // 制限内に収まったら終了
+                    if (compressedData.length <= maxChars) {
+                        console.log(`✅ 画像圧縮成功: ${imageObj.name} (${imageObj.data.length} → ${compressedData.length} 文字)`);
+                        resolve({
+                            data: compressedData,
+                            name: imageObj.name,
+                            isVideo: false
+                        });
+                        return;
+                    }
+                    
+                    // 次の試行のパラメータ調整
+                    if (quality > 0.3) {
+                        // まずは品質を下げる(30%まで)
+                        quality -= 0.1;
+                    } else {
+                        // 品質が十分低くなったらサイズを縮小
+                        maxSize = maxSize * 0.85; // 15%ずつ縮小
+                        quality = 0.7; // 品質を少し戻す
+                    }
+                    
+                    attempts++;
+                }
+                
+                // 最大試行回数に達した場合(通常ここには来ない)
+                console.error('❌ 画像圧縮が最大試行回数に達しました。最後の結果を使用します。');
+                resolve({
+                    data: compressedData,
+                    name: imageObj.name,
+                    isVideo: false
+                });
+            };
+            
+            img.onerror = () => {
+                console.error('❌ 画像の読み込みエラー:', imageObj.name);
+                resolve(imageObj); // エラー時は元のまま
+            };
+            
+            img.src = imageObj.data;
+        });
+    } catch (error) {
+        console.error('❌ 画像圧縮エラー:', error);
+        return imageObj; // エラー時は元のまま
+    }
+}
+
 // GitHubに直接Issueを作成
 async function saveToGitHub(report) {
     if (!CONFIG.github.enabled || !CONFIG.github.token) {
@@ -999,12 +1119,19 @@ async function saveToGitHub(report) {
         ? report.missions.map(m => `- ${m.index + 1}. ${m.text}`).join('\n')
         : 'なし';
     
+    // 画像をGitHub用に圧縮(Issue本文は65536文字制限)
+    const compressedImages = await Promise.all(
+        report.images.map(img => compressImageForGitHub(img))
+    );
+    
     // 画像を本文に埋め込む(Base64形式)
-    const imagesText = report.images.map((img, index) => {
+    const imagesText = compressedImages.map((img, index) => {
         if (img.isVideo) {
             return `### 動画 ${index + 1}: ${img.name}\n\n⚠️ 動画は容量が大きいためGitHub Issuesには含まれていません。LocalStorageで確認してください。\n`;
+        } else if (img.data) {
+            return `### 📸 写真\n\n![${img.name}](${img.data})\n`;
         } else {
-            return `### 画像 ${index + 1}: ${img.name}\n\n![${img.name}](${img.data})\n`;
+            return '';
         }
     }).join('\n');
     
