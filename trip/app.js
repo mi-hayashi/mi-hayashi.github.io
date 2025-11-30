@@ -193,6 +193,9 @@ function initializeApp() {
     // トークンをデコード
     decodeToken();
     
+    // 起動時にLocalStorageをクリーンアップ(容量確保)
+    cleanupSyncedReportsOnStartup();
+    
     renderTeamGrid();
     setupFileInput();
     
@@ -605,8 +608,33 @@ async function submitReport() {
             syncStatus: 'pending' // 同期待ち
         };
         
+        // LocalStorage容量チェック(保存前)
+        const currentSize = getLocalStorageSize();
+        const reportSize = JSON.stringify(report).length;
+        const estimatedTotalSize = currentSize + reportSize;
+        const maxSize = 5 * 1024 * 1024; // 5MB(安全マージン)
+        
+        console.log(`💾 容量チェック: 現在${(currentSize / 1024).toFixed(1)}KB + 新規${(reportSize / 1024).toFixed(1)}KB = 推定${(estimatedTotalSize / 1024).toFixed(1)}KB`);
+        
+        // 容量不足の可能性がある場合、事前にクリーンアップ
+        if (estimatedTotalSize > maxSize * 0.8) { // 80%以上使用
+            console.log('⚠️ LocalStorage使用量が多いため、同期済みレポートを削除します...');
+            await cleanupSyncedReports(reportSize * 2); // 新規レポートの2倍の容量を確保
+        }
+        
         // LocalStorageに保存
-        await saveReport(report);
+        try {
+            await saveReport(report);
+        } catch (saveError) {
+            // QuotaExceededErrorの場合は再度クリーンアップして再試行
+            if (saveError.name === 'QuotaExceededError' || saveError.message?.includes('quota')) {
+                console.log('🗑️ 容量不足エラー。さらにクリーンアップして再試行...');
+                await cleanupSyncedReports(); // 全ての同期済みレポートを削除
+                await saveReport(report); // 再試行
+            } else {
+                throw saveError; // その他のエラーは再スロー
+            }
+        }
         
         // GitHub Issuesにも保存(オプション)
         if (CONFIG.github.enabled && CONFIG.github.token) {
@@ -751,6 +779,93 @@ function fileToBase64(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
+}
+
+// LocalStorageの使用量を確認
+function getLocalStorageSize() {
+    try {
+        let total = 0;
+        for (let key in localStorage) {
+            if (localStorage.hasOwnProperty(key)) {
+                total += localStorage[key].length + key.length;
+            }
+        }
+        return total;
+    } catch (error) {
+        console.error('❌ LocalStorage使用量の確認エラー:', error);
+        return 0;
+    }
+}
+
+// 起動時にLocalStorageをクリーンアップ
+async function cleanupSyncedReportsOnStartup() {
+    try {
+        const currentSize = getLocalStorageSize();
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        
+        console.log(`💾 LocalStorage使用量: ${(currentSize / 1024).toFixed(1)}KB / ${(maxSize / 1024).toFixed(1)}KB`);
+        
+        // 使用量が70%以上の場合は自動クリーンアップ
+        if (currentSize > maxSize * 0.7) {
+            console.log('🗑️ 起動時クリーンアップ実行中...');
+            const targetFreeBytes = maxSize * 0.3; // 30%分の容量を確保
+            await cleanupSyncedReports(targetFreeBytes);
+        }
+    } catch (error) {
+        console.error('❌ 起動時クリーンアップエラー:', error);
+    }
+}
+
+// GitHub同期済みのレポートをLocalStorageから削除(容量確保)
+async function cleanupSyncedReports(targetBytes = 0) {
+    try {
+        const localData = localStorage.getItem('missionReports');
+        if (!localData) return 0;
+        
+        const reports = JSON.parse(localData);
+        
+        // syncStatus='synced'のレポートを古い順にソート
+        const syncedReports = reports
+            .filter(r => r.syncStatus === 'synced')
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        if (syncedReports.length === 0) {
+            console.log('🗑️ 削除可能な同期済みレポートがありません');
+            return 0;
+        }
+        
+        const beforeSize = getLocalStorageSize();
+        let deletedCount = 0;
+        
+        // 目標バイト数まで、または全ての同期済みレポートを削除するまで繰り返す
+        for (const syncedReport of syncedReports) {
+            // 該当レポートを削除
+            const remainingReports = reports.filter(r => r.timestamp !== syncedReport.timestamp);
+            localStorage.setItem('missionReports', JSON.stringify(remainingReports));
+            deletedCount++;
+            
+            const currentSize = getLocalStorageSize();
+            const freedBytes = beforeSize - currentSize;
+            
+            console.log(`🗑️ 同期済みレポート削除: ${deletedCount}件 (解放: ${(freedBytes / 1024).toFixed(1)}KB)`);
+            
+            // 十分な容量が確保できたら終了
+            if (targetBytes > 0 && freedBytes >= targetBytes) {
+                break;
+            }
+            
+            // reportsを更新(次の削除のため)
+            reports.splice(reports.indexOf(syncedReport), 1);
+        }
+        
+        const afterSize = getLocalStorageSize();
+        console.log(`✅ クリーンアップ完了: ${deletedCount}件削除 (${(beforeSize / 1024).toFixed(1)}KB → ${(afterSize / 1024).toFixed(1)}KB)`);
+        
+        return deletedCount;
+    } catch (error) {
+        console.error('❌ 同期済みレポート削除エラー:', error);
+        return 0;
+    }
 }
 
 // レポート保存(LocalStorage)
